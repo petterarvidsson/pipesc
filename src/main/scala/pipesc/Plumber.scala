@@ -1,4 +1,4 @@
-package scvmc
+package pipesc
 
 class Plumber {
   import Plumber._

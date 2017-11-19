@@ -1,4 +1,4 @@
-package scvmc
+package pipesc
 
 import scala.util.parsing.combinator._
 

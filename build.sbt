@@ -2,7 +2,7 @@ import ReleaseTransformations._
 
 organization := "se.petterarvidsson"
 
-name := "scvmc"
+name := "pipesc"
 
 scalaVersion := "2.12.3"
 

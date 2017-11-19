@@ -1,4 +1,4 @@
-package scvmc
+package pipesc
 
 import scala.util.parsing.combinator._
 import scala.util.parsing.input.{NoPosition, Position, Positional, Reader}
