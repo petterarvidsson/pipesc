@@ -24,7 +24,7 @@ object PipeStatement {
         printIndented(v, indentation)
       case FunctionApplication(identifier, arguments) =>
         printIndented(s"${identifier.name}(", indentation)
-        for(argument <- arguments) {
+        for (argument <- arguments) {
           prettyPrint(argument, indentation + 2)
         }
         printIndented(s")", indentation)
@@ -42,8 +42,12 @@ case class FunctionDefinition(identifier: Identifier, arguments: Seq[Identifier]
     d <- definitions
     v <- d.values
   } {
-    require(v.identifier != d.identifier, s"${v.identifier.pos}: Recursive definition of ${d.identifier.name} is not allowed")
-    require(arguments.contains(v.identifier) || definitions.exists(_.identifier == v.identifier), s"${v.identifier.pos}: ${v.identifier.name} is undefined in function ${identifier.name}")
+    require(v.identifier != d.identifier,
+            s"${v.identifier.pos}: Recursive definition of ${d.identifier.name} is not allowed")
+    require(
+      arguments.contains(v.identifier) || definitions.exists(_.identifier == v.identifier),
+      s"${v.identifier.pos}: ${v.identifier.name} is undefined in function ${identifier.name}"
+    )
   }
 }
 case class Definition(identifier: Identifier, statement: PipeStatement) {
@@ -81,8 +85,8 @@ object PipeParser extends Parsers {
 
   def definitions = definition.*
 
-  def file = phrase(rep1(fnDef | newline)) ^^ {
-    r => r.collect {
+  def file = phrase(rep1(fnDef | newline)) ^^ { r =>
+    r.collect {
       case fn: FunctionDefinition => fn
     }
   }

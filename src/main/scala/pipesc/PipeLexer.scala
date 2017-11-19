@@ -22,12 +22,14 @@ object PipeLexer extends RegexParsers {
   def kdef = "def" ^^ { _ =>
     Def
   }
-  def identifier = positioned("""[a-zA-Z_][a-zA-Z0-9_]*""".r ^^ { s =>
-    Identifier(s.toString)
-  })
-  def intnum = positioned("""[0-9]+""".r ^^ { s =>
-    IntNum(s.toInt)
-  })
+  def identifier =
+    positioned("""[a-zA-Z_][a-zA-Z0-9_]*""".r ^^ { s =>
+      Identifier(s.toString)
+    })
+  def intnum =
+    positioned("""[0-9]+""".r ^^ { s =>
+      IntNum(s.toInt)
+    })
   def open = "(" ^^ { _ =>
     Open
   }
@@ -47,7 +49,9 @@ object PipeLexer extends RegexParsers {
     NewLine
   }
   def tokens: Parser[List[PipeToken]] = {
-    phrase(rep1( intnum | kdef | identifier | open | close | comma | equals | colon | newline )) ^^ {r => r}
+    phrase(rep1(intnum | kdef | identifier | open | close | comma | equals | colon | newline)) ^^ { r =>
+      r
+    }
   }
 
   override def skipWhitespace = true

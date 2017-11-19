@@ -11,7 +11,6 @@ class Plumber {
 
   // def unroll(constant: Constant, out: Int): Seq[NativeCode] =
 
-
   // def unroll(value: Value, out: Int, arguments: Map[Identifier, Int]): Seq[NativeCode] = {
 
   // }
@@ -32,7 +31,9 @@ class Plumber {
   //   }
   // }
 
-  def convertArguments(fn: FunctionDefinition, functionArguments: Seq[PipeStatement], arguments: Map[Identifier, PipeStatement]): Map[Identifier, PipeStatement] =
+  def convertArguments(fn: FunctionDefinition,
+                       functionArguments: Seq[PipeStatement],
+                       arguments: Map[Identifier, PipeStatement]): Map[Identifier, PipeStatement] =
     fn.arguments.zip(functionArguments) map {
       case (identifier, Value(oldIdentifier)) =>
         identifier -> arguments(oldIdentifier)
@@ -40,12 +41,14 @@ class Plumber {
         identifier -> stmnt
     } toMap
 
-  def unroll(f: FunctionApplication, arguments: Map[Identifier, PipeStatement], functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
+  def unroll(f: FunctionApplication,
+             arguments: Map[Identifier, PipeStatement],
+             functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
     val unrolledArguments = f.arguments.map {
       case f: FunctionApplication =>
         unroll(f, arguments, functions)
       case Value(identifier) => arguments(identifier)
-      case stmnt => stmnt
+      case stmnt             => stmnt
     }
     functions.get(f.identifier) match {
       case Some(fn) =>
@@ -55,8 +58,9 @@ class Plumber {
     }
   }
 
-
-  def unroll(definition: Definition, arguments: Map[Identifier, PipeStatement], functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
+  def unroll(definition: Definition,
+             arguments: Map[Identifier, PipeStatement],
+             functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
     definition.statement match {
       case Value(identifier) => arguments(identifier)
       case f: FunctionApplication =>
@@ -65,7 +69,9 @@ class Plumber {
     }
   }
 
-  def unroll(fn: FunctionDefinition, arguments: Map[Identifier, PipeStatement], functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
+  def unroll(fn: FunctionDefinition,
+             arguments: Map[Identifier, PipeStatement],
+             functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
     unroll(fn.definitions(0), arguments, functions)
   }
 
