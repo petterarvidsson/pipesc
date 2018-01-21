@@ -37,21 +37,15 @@ case class FunctionApplication(identifier: Identifier, arguments: Seq[PipeStatem
 case class Value(identifier: Identifier) extends PipeStatement
 case class Constant(value: IntNum) extends PipeStatement
 
-case class FunctionDefinition(identifier: Identifier, arguments: Seq[Identifier], definitions: Seq[Definition]) {
+case class FunctionDefinition(identifier: Identifier, arguments: Seq[Identifier], statement: PipeStatement) {
   for {
-    d <- definitions
-    v <- d.values
+    v <- PipeStatement.values(statement)
   } {
-    require(v.identifier != d.identifier,
-            s"${v.identifier.pos}: Recursive definition of ${d.identifier.name} is not allowed")
     require(
-      arguments.contains(v.identifier) || definitions.exists(_.identifier == v.identifier),
+      arguments.contains(v.identifier),
       s"${v.identifier.pos}: ${v.identifier.name} is undefined in function ${identifier.name}"
     )
   }
-}
-case class Definition(identifier: Identifier, statement: PipeStatement) {
-  def values: Set[Value] = PipeStatement.values(statement)
 }
 
 object PipeParser extends Parsers {
@@ -69,8 +63,8 @@ object PipeParser extends Parsers {
 
   def fndefarglist: Parser[Seq[Identifier]] = repsep(identifier, Comma)
 
-  def fnDef = Def ~ identifier ~ Open ~ fndefarglist ~ Close ~ Colon ~ NewLine.* ~ definitions ^^ {
-    case _ ~ i ~ _ ~ args ~ _ ~ _ ~ _ ~ defs => FunctionDefinition(i, args, defs)
+  def fnDef = Def ~ identifier ~ Open ~ fndefarglist ~ Close ~ Equals ~ NewLine.* ~ statement ^^ {
+    case _ ~ i ~ _ ~ args ~ _ ~ _ ~ _ ~ statement => FunctionDefinition(i, args, statement)
   }
 
   def fn = identifier ~ Open ~ arglist ~ Close ^^ {
@@ -78,12 +72,6 @@ object PipeParser extends Parsers {
   }
 
   def statement: Parser[PipeStatement] = fn | constant | value
-
-  def definition = identifier ~ Equals ~ statement ~ NewLine ^^ {
-    case i ~ _ ~ stmnt ~ _ => Definition(i, stmnt)
-  }
-
-  def definitions = definition.*
 
   def file = phrase(rep1(fnDef | newline)) ^^ { r =>
     r.collect {

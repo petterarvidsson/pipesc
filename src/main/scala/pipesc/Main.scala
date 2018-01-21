@@ -6,14 +6,13 @@ object Main {
   def main(args: Array[String]) {
     val plumber = new Plumber()
     val code = """
-def g(a, b, c, d):
-  q = mul(add(a, b), add(d, c))
+def g(a, b, c, d) = mul(add(a, b), add(d, c))
 
-def q(b):
-  a = add(b, g(1, 2, 3, 4))
+def q(b) =
+  add(b, g(1, 2, 3, 4))
 
-def main():
-  v = add(q(0),q(1))
+def main() =
+  add(q(0),q(1))
 """
     println(code)
     PipeLexer.parse(PipeLexer.tokens, code) match {

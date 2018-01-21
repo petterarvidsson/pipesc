@@ -58,10 +58,10 @@ class Plumber {
     }
   }
 
-  def unroll(definition: Definition,
+  def unroll(statement: PipeStatement,
              arguments: Map[Identifier, PipeStatement],
              functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
-    definition.statement match {
+    statement match {
       case Value(identifier) => arguments(identifier)
       case f: FunctionApplication =>
         unroll(f, arguments, functions)
@@ -72,7 +72,7 @@ class Plumber {
   def unroll(fn: FunctionDefinition,
              arguments: Map[Identifier, PipeStatement],
              functions: Map[Identifier, FunctionDefinition]): PipeStatement = {
-    unroll(fn.definitions(0), arguments, functions)
+    unroll(fn.statement, arguments, functions)
   }
 
   def unroll(entryPoint: Identifier, functions: Map[Identifier, FunctionDefinition]): PipeStatement = {

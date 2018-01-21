@@ -13,7 +13,6 @@ case object Close extends PipeToken
 case object NewLine extends PipeToken
 case object Comma extends PipeToken
 case object Dot extends PipeToken
-case object Colon extends PipeToken
 case object Equals extends PipeToken
 case object Def extends PipeToken
 
@@ -39,9 +38,6 @@ object PipeLexer extends RegexParsers {
   def comma = "," ^^ { _ =>
     Comma
   }
-  def colon = ":" ^^ { _ =>
-    Colon
-  }
   def equals = "=" ^^ { _ =>
     Equals
   }
@@ -49,7 +45,7 @@ object PipeLexer extends RegexParsers {
     NewLine
   }
   def tokens: Parser[List[PipeToken]] = {
-    phrase(rep1(intnum | kdef | identifier | open | close | comma | equals | colon | newline)) ^^ { r =>
+    phrase(rep1(intnum | kdef | identifier | open | close | comma | equals | newline)) ^^ { r =>
       r
     }
   }
