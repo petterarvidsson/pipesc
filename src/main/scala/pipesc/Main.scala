@@ -25,7 +25,7 @@ def main() =
             println(s"AST: $ast, $next")
             val functions = ast.map(fn => fn.identifier -> fn).toMap
             val unrolled = plumber.unroll(Identifier("main"), functions)
-            PipeStatement.prettyPrint(unrolled, 0)
+            NativePipeStatement.prettyPrint(unrolled, 0)
         }
     }
 
