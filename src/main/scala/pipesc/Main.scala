@@ -26,6 +26,9 @@ def main(a, b) =
             val functions = ast.map(fn => fn.identifier -> fn).toMap
             val entry = plumber.unroll(Identifier("main"), functions)
             EntryPoint.prettyPrint(entry)
+            val program = Assembler.assemble(entry)
+            Program.prettyPrint(program)
+            println(VM.run(program, "a" -> 1, "b" -> 2).toSeq)
         }
     }
 
