@@ -1,5 +1,16 @@
 package pipesc
 
+case class EntryPoint(output: NativePipeStatement, inputs: Set[Value])
+
+object EntryPoint {
+  def prettyPrint(entryPoint: EntryPoint) {
+    val inputs = entryPoint.inputs.map(_.identifier.name).mkString(", ")
+    NativePipeStatement.printIndented(s"entry($inputs) {", 0)
+    NativePipeStatement.prettyPrint(entryPoint.output, 1)
+    NativePipeStatement.printIndented(s"}", 0)
+  }
+}
+
 class Plumber {
 
   def convertArguments(fn: FunctionDefinition,
@@ -48,9 +59,13 @@ class Plumber {
     unroll(fn.statement, arguments, functions)
   }
 
-  def unroll(entryPoint: Identifier, functions: Map[Identifier, FunctionDefinition]): NativePipeStatement = {
+  def unroll(entryPoint: Identifier, functions: Map[Identifier, FunctionDefinition]): EntryPoint = {
     val entry = functions(entryPoint)
-    require(entry.arguments.size == 0, s"Entry point: ${entryPoint.name} must have 0 arguments")
-    unroll(FunctionApplication(entry.identifier, Seq()), Map[Identifier, NativePipeStatement](), functions)
+    val arguments =  entry.arguments.map { identifier =>
+      (identifier,  Value(identifier))
+    } toMap
+
+    //require(entry.arguments.size == 0, s"Entry point: ${entryPoint.name} must have 0 arguments")
+    EntryPoint(unroll(entry, arguments, functions), arguments.values.toSet)
   }
 }

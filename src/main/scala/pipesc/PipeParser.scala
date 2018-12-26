@@ -43,7 +43,6 @@ case class Value(identifier: Identifier) extends PipeStatement with NativePipeSt
 case class Constant(value: IntNum) extends PipeStatement with NativePipeStatement
 case class NativeFunctionApplication(identifier: Identifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
     extends NativePipeStatement
-
 case class FunctionDefinition(identifier: Identifier, arguments: Seq[Identifier], statement: PipeStatement) {
   for {
     v <- PipeStatement.values(statement)

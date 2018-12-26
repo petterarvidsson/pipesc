@@ -9,10 +9,10 @@ object Main {
 def g(a, b, c, d) = mul(add(a, b), add(d, c))
 
 def q(b) =
-  add(b, g(1, 2, 3, 4))
+  add(b, g(1, 2, b, 4))
 
-def main() =
-  add(q(0),q(1))
+def main(a, b) =
+  add(q(a),q(b))
 """
     println(code)
     PipeLexer.parse(PipeLexer.tokens, code) match {
@@ -24,8 +24,8 @@ def main() =
           case PipeParser.Success(ast, next) =>
             println(s"AST: $ast, $next")
             val functions = ast.map(fn => fn.identifier -> fn).toMap
-            val unrolled = plumber.unroll(Identifier("main"), functions)
-            NativePipeStatement.prettyPrint(unrolled, 0)
+            val entry = plumber.unroll(Identifier("main"), functions)
+            EntryPoint.prettyPrint(entry)
         }
     }
 
