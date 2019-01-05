@@ -1,5 +1,6 @@
 package pipesc
 
+import java.io.FileOutputStream
 import scala.util.parsing.combinator._
 
 object Main {
@@ -29,6 +30,19 @@ def main(a, b) =
             val program = Assembler.assemble(entry)
             Program.prettyPrint(program)
             println(VM.run(program, "a" -> 1, "b" -> 2).toSeq)
+            val binary = Binary.binaryEncode(program)
+            binary.rewind()
+            val instructions = binary.getInt() * 8
+            val bytes = Array.ofDim[Byte](instructions)
+            binary.get(bytes)
+            val stackSize = binary.getShort()
+            println(VM.run(bytes, stackSize, Array[Short](1, 2)).toSeq)
+            binary.rewind()
+            val stream = new FileOutputStream("program.bin")
+            val fileBytes = Array.ofDim[Byte](4 + instructions + 2)
+            binary.get(fileBytes)
+            stream.write(fileBytes);
+            stream.close()
         }
     }
 

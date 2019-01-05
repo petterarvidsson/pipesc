@@ -9,14 +9,26 @@ case class UnaryInstruction(opcode: Int, address: Int, out: Int) extends Instruc
 case class NullaryInstruction(opcode: Int, constant: Constant, out: Int) extends Instruction
 
 object Instruction {
-  val Load = 0x00
-  val Add = 0x01
-  val Mul = 0x02
-  val Let = 0x03
+  // ALU
+  val ADD = 0x00
+  val SUB = 0x01
+  val MUL = 0x02
+  val DIV = 0x03
+  val MOD = 0x04
+
+  // BRANCH
+  val SET = 0x10
+
+  // MEMORY
+  val LOAD = 0x20
+  val CNT = 0x21 // Set memory to constant
 
   val i2o = Map[Identifier, Int](
-    Identifier("add") -> Add,
-    Identifier("mul") -> Mul
+    Identifier("add") -> ADD,
+    Identifier("sub") -> SUB,
+    Identifier("mul") -> MUL,
+    Identifier("div") -> DIV,
+    Identifier("mod") -> MOD
   )
 }
 
@@ -58,9 +70,9 @@ object Assembler {
         val arg2Fragment = assemble(arg2, arg2Offset, values)
           arg1Fragment ++ arg2Fragment ++ Fragment(BinaryInstruction(i2o(identifier), arg1Offset, arg2Offset, outOffset), arg2Offset)
       case constant: Constant =>
-        Fragment(NullaryInstruction(Let, constant, offset), offset)
+        Fragment(NullaryInstruction(CNT, constant, offset), offset)
       case Value(identifier) =>
-        Fragment(UnaryInstruction(Load, values(identifier), offset), offset)
+        Fragment(UnaryInstruction(LOAD, values(identifier), offset), offset)
     }
 
   def assemble(entry: EntryPoint): Program = {
