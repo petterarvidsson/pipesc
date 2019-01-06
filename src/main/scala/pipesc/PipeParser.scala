@@ -3,6 +3,10 @@ package pipesc
 import scala.util.parsing.combinator._
 import scala.util.parsing.input.{NoPosition, Position, Positional, Reader}
 
+case class NSIdentifier(namespace: Seq[Identifier], identifier: Identifier) {
+  def name = namespace.map(_.name).mkString(".") + "." + identifier.name
+}
+
 sealed trait PipeStatement
 
 object PipeStatement {
@@ -38,12 +42,12 @@ object NativePipeStatement {
   }
 
 }
-case class FunctionApplication(identifier: Identifier, arguments: Seq[PipeStatement]) extends PipeStatement
+case class FunctionApplication(identifier: NSIdentifier, arguments: Seq[PipeStatement]) extends PipeStatement
 case class Value(identifier: Identifier) extends PipeStatement with NativePipeStatement
 case class Constant(value: IntNum) extends PipeStatement with NativePipeStatement
-case class NativeFunctionApplication(identifier: Identifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
+case class NativeFunctionApplication(identifier: NSIdentifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
     extends NativePipeStatement
-case class FunctionDefinition(identifier: Identifier, arguments: Seq[Identifier], statement: PipeStatement) {
+case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[Identifier], statement: PipeStatement) {
   for {
     v <- PipeStatement.values(statement)
   } {
@@ -63,23 +67,40 @@ object PipeParser extends Parsers {
 
   def newline = accept("newline", { case NewLine => NewLine })
 
-  def arglist: Parser[Seq[PipeStatement]] = rep1sep(statement, Comma)
+  def arglist(namespaceSeq: Seq[Identifier]): Parser[Seq[PipeStatement]] = rep1sep(statement(namespaceSeq), Comma)
+
+  def namespacePart = identifier ~ Dot ^^ {
+    case i ~ _ => i
+  }
+
+  def namespace = namespacePart ~ namespacePart .* ~ identifier ^^ {
+    case root ~ identifiers ~ identifier => NSIdentifier(root +: identifiers.toSeq, identifier)
+  }
+
+  def namespaceIdentifier(namespaceSeq: Seq[Identifier]): Parser[NSIdentifier] = (namespace | identifier) ^^ {
+    case n: NSIdentifier => n
+    case i: Identifier => if(Predef.is(i)) {
+      NSIdentifier(Predef.NS, i)
+    } else {
+      NSIdentifier(namespaceSeq, i)
+    }
+  }
 
   def value = accept("identifier", { case i: Identifier => Value(i) })
 
   def fndefarglist: Parser[Seq[Identifier]] = repsep(identifier, Comma)
 
-  def fnDef = Def ~ identifier ~ Open ~ fndefarglist ~ Close ~ Equals ~ NewLine.* ~ statement ^^ {
+  def fnDef(namespaceSeq: Seq[Identifier]) = Def ~ namespaceIdentifier(namespaceSeq) ~ Open ~ fndefarglist ~ Close ~ Equals ~ NewLine.* ~ statement(namespaceSeq) ^^ {
     case _ ~ i ~ _ ~ args ~ _ ~ _ ~ _ ~ statement => FunctionDefinition(i, args, statement)
   }
 
-  def fn = identifier ~ Open ~ arglist ~ Close ^^ {
+  def fn(namespaceSeq: Seq[Identifier]) = namespaceIdentifier(namespaceSeq) ~ Open ~ arglist(namespaceSeq) ~ Close ^^ {
     case i ~ _ ~ args ~ _ => FunctionApplication(i, args)
   }
 
-  def statement: Parser[PipeStatement] = fn | constant | value
+  def statement(namespaceSeq: Seq[Identifier]): Parser[PipeStatement] = fn(namespaceSeq) | constant | value
 
-  def file = phrase(rep1(fnDef | newline)) ^^ { r =>
+  def file(namespaceSeq: Seq[Identifier]) = phrase(rep1(fnDef(namespaceSeq) | newline)) ^^ { r =>
     r.collect {
       case fn: FunctionDefinition => fn
     }

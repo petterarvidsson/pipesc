@@ -29,6 +29,9 @@ object PipeLexer extends RegexParsers {
     positioned("""[0-9]+""".r ^^ { s =>
       IntNum(s.toInt)
     })
+  def dot = "." ^^ { _ =>
+    Dot
+  }
   def open = "(" ^^ { _ =>
     Open
   }
@@ -45,7 +48,7 @@ object PipeLexer extends RegexParsers {
     NewLine
   }
   def tokens: Parser[List[PipeToken]] = {
-    phrase(rep1(intnum | kdef | identifier | open | close | comma | equals | newline)) ^^ { r =>
+    phrase(rep1(intnum | kdef | identifier | dot | open | close | comma | equals | newline)) ^^ { r =>
       r
     }
   }

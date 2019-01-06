@@ -10,7 +10,7 @@ object Main {
 def g(a, b, c, d) = mul(add(a, b), add(d, c))
 
 def q(b) =
-  add(b, g(1, 2, b, 4))
+  predef.add(b, g(1, 2, b, 4))
 
 def main(a, b) =
   add(q(a),q(b))
@@ -20,12 +20,14 @@ def main(a, b) =
       case PipeLexer.NoSuccess(msg, next) => println(msg)
       case PipeLexer.Success(tokens, next) =>
         println(s"Tokens: $tokens, $next")
-        PipeParser.file(new PipeTokenReader(tokens)) match {
+        val moduleNs = Seq(Identifier("demo"))
+        PipeParser.file(moduleNs)(new PipeTokenReader(tokens)) match {
           case PipeParser.NoSuccess(msg, next) => println(msg); println(next)
           case PipeParser.Success(ast, next) =>
             println(s"AST: $ast, $next")
             val functions = ast.map(fn => fn.identifier -> fn).toMap
-            val entry = plumber.unroll(Identifier("main"), functions)
+            println(functions)
+            val entry = plumber.unroll(NSIdentifier(moduleNs, Identifier("main")), functions)
             EntryPoint.prettyPrint(entry)
             val program = Assembler.assemble(entry)
             Program.prettyPrint(program)

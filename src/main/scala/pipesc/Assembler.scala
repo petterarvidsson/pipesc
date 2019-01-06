@@ -23,12 +23,12 @@ object Instruction {
   val LOAD = 0x20
   val CNT = 0x21 // Set memory to constant
 
-  val i2o = Map[Identifier, Int](
-    Identifier("add") -> ADD,
-    Identifier("sub") -> SUB,
-    Identifier("mul") -> MUL,
-    Identifier("div") -> DIV,
-    Identifier("mod") -> MOD
+  val i2o = Map[NSIdentifier, Int](
+    NSIdentifier(Predef.NS, Predef.Add) -> ADD,
+    NSIdentifier(Predef.NS, Predef.Sub) -> SUB,
+    NSIdentifier(Predef.NS, Predef.Mul) -> MUL,
+    NSIdentifier(Predef.NS, Predef.Div) -> DIV,
+    NSIdentifier(Predef.NS, Predef.Mod) -> MOD
   )
 }
 

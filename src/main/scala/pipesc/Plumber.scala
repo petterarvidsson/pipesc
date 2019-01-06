@@ -16,7 +16,7 @@ class Plumber {
   def convertArguments(fn: FunctionDefinition,
                        functionArguments: Seq[PipeStatement],
                        arguments: Map[Identifier, NativePipeStatement],
-                       functions: Map[Identifier, FunctionDefinition]): Map[Identifier, NativePipeStatement] =
+                       functions: Map[NSIdentifier, FunctionDefinition]): Map[Identifier, NativePipeStatement] =
     fn.arguments.zip(functionArguments) map {
       case (identifier, Value(oldIdentifier)) =>
         identifier -> arguments(oldIdentifier)
@@ -26,7 +26,7 @@ class Plumber {
 
   def unroll(f: FunctionApplication,
              arguments: Map[Identifier, NativePipeStatement],
-             functions: Map[Identifier, FunctionDefinition]): NativePipeStatement = {
+             functions: Map[NSIdentifier, FunctionDefinition]): NativePipeStatement = {
     val unrolledArguments = f.arguments.map {
       case f: FunctionApplication =>
         unroll(f, arguments, functions)
@@ -44,7 +44,7 @@ class Plumber {
 
   def unroll(statement: PipeStatement,
              arguments: Map[Identifier, NativePipeStatement],
-             functions: Map[Identifier, FunctionDefinition]): NativePipeStatement = {
+             functions: Map[NSIdentifier, FunctionDefinition]): NativePipeStatement = {
     statement match {
       case Value(identifier) => arguments(identifier)
       case f: FunctionApplication =>
@@ -55,11 +55,11 @@ class Plumber {
 
   def unroll(fn: FunctionDefinition,
              arguments: Map[Identifier, NativePipeStatement],
-             functions: Map[Identifier, FunctionDefinition]): NativePipeStatement = {
+             functions: Map[NSIdentifier, FunctionDefinition]): NativePipeStatement = {
     unroll(fn.statement, arguments, functions)
   }
 
-  def unroll(entryPoint: Identifier, functions: Map[Identifier, FunctionDefinition]): EntryPoint = {
+  def unroll(entryPoint: NSIdentifier, functions: Map[NSIdentifier, FunctionDefinition]): EntryPoint = {
     val entry = functions(entryPoint)
     val arguments =  entry.arguments.map { identifier =>
       (identifier,  Value(identifier))
