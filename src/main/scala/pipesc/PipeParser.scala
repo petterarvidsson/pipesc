@@ -17,6 +17,8 @@ object PipeStatement {
       arguments.flatMap(values).toSet
     case _: Constant =>
       Set.empty[Value]
+    case IfStatement(c, t, e) =>
+      values(c) ++ values(t) ++ values(e)
   }
 }
 
@@ -36,6 +38,12 @@ object NativePipeStatement {
         prettyPrint(arg1, indentation + 2)
         prettyPrint(arg2, indentation + 2)
         printIndented(s")", indentation)
+      case NativeIfStatement(cond, arg1, arg2) =>
+        printIndented("if(", indentation)
+        prettyPrint(cond, indentation + 2)
+        prettyPrint(arg1, indentation + 2)
+        prettyPrint(arg2, indentation + 2)
+        printIndented(s")", indentation)
       case c: Constant =>
         printIndented(c, indentation)
     }
@@ -43,10 +51,12 @@ object NativePipeStatement {
 
 }
 case class FunctionApplication(identifier: NSIdentifier, arguments: Seq[PipeStatement]) extends PipeStatement
+case class IfStatement(cond: PipeStatement, `then`: PipeStatement, `else`: PipeStatement) extends PipeStatement
 case class Value(identifier: Identifier) extends PipeStatement with NativePipeStatement
 case class Constant(value: IntNum) extends PipeStatement with NativePipeStatement
 case class NativeFunctionApplication(identifier: NSIdentifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
     extends NativePipeStatement
+case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatement, `else`: NativePipeStatement) extends NativePipeStatement
 case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[Identifier], statement: PipeStatement) {
   for {
     v <- PipeStatement.values(statement)
@@ -98,7 +108,11 @@ object PipeParser extends Parsers {
     case i ~ _ ~ args ~ _ => FunctionApplication(i, args)
   }
 
-  def statement(namespaceSeq: Seq[Identifier]): Parser[PipeStatement] = fn(namespaceSeq) | constant | value
+  def ifa(namespaceSeq: Seq[Identifier]) = If ~ Open ~ statement(namespaceSeq) ~ Comma ~ statement(namespaceSeq) ~ Comma ~ statement(namespaceSeq) ~ Close ^^ {
+    case _ ~ _ ~ c ~ _ ~ t ~ _ ~ e ~ _ => IfStatement(c, t, e)
+  }
+
+  def statement(namespaceSeq: Seq[Identifier]): Parser[PipeStatement] = ifa(namespaceSeq) | fn(namespaceSeq) | constant | value
 
   def file(namespaceSeq: Seq[Identifier]) = phrase(rep1(fnDef(namespaceSeq) | newline)) ^^ { r =>
     r.collect {

@@ -7,5 +7,7 @@ object Predef {
   val Sub = Identifier("sub")
   val Div = Identifier("div")
   val Mod = Identifier("mod")
-  val is = Set(Add, Mul, Sub, Div, Mod)
+  val If = Identifier("if")
+  val IfWithNs = NSIdentifier(NS, If)
+  val is = Set(Add, Mul, Sub, Div, Mod, If)
 }

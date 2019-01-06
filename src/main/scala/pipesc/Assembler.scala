@@ -18,6 +18,7 @@ object Instruction {
 
   // BRANCH
   val SET = 0x10
+  val SETN = 0x11
 
   // MEMORY
   val LOAD = 0x20
@@ -68,7 +69,16 @@ object Assembler {
         val arg1Fragment = assemble(arg1, arg1Offset, values)
         val arg2Offset = offset + 2
         val arg2Fragment = assemble(arg2, arg2Offset, values)
-          arg1Fragment ++ arg2Fragment ++ Fragment(BinaryInstruction(i2o(identifier), arg1Offset, arg2Offset, outOffset), arg2Offset)
+        arg1Fragment ++ arg2Fragment ++ Fragment(BinaryInstruction(i2o(identifier), arg1Offset, arg2Offset, outOffset), arg2Offset)
+      case NativeIfStatement(c, t, e) =>
+        val outOffset = offset
+        val condOffset = offset + 1
+        val condFragment = assemble(c, condOffset, values)
+        val thenOffset = offset + 2
+        val thenFragment = assemble(t, thenOffset, values)
+        val elseOffset = offset + 3
+        val elseFragment = assemble(e, elseOffset, values)
+        condFragment ++ thenFragment ++ elseFragment ++ Fragment(Seq(BinaryInstruction(SET, condOffset, thenOffset, outOffset), BinaryInstruction(SETN, condOffset, elseOffset, outOffset)), elseOffset)
       case constant: Constant =>
         Fragment(NullaryInstruction(CNT, constant, offset), offset)
       case Value(identifier) =>

@@ -12,6 +12,12 @@ object VM {
     }
     for (i <- program.instructions) {
       i match {
+        case BinaryInstruction(SET, arg1, arg2, out) => if(memory(arg1) != 0) {
+          memory.update(out, memory(arg2))
+        }
+        case BinaryInstruction(SETN, arg1, arg2, out) => if(memory(arg1) == 0) {
+          memory.update(out, memory(arg2))
+        }
         case BinaryInstruction(ADD, arg1, arg2, out) => memory.update(out, memory(arg1) + memory(arg2))
         case BinaryInstruction(MUL, arg1, arg2, out) => memory.update(out, memory(arg1) * memory(arg2))
         case UnaryInstruction(LOAD, address, out) => memory.update(out, memory(address))
@@ -33,6 +39,12 @@ object VM {
       val arg2 = buffer.getShort()
       val out = buffer.getShort()
       opcode match {
+        case SET => if(memory(arg1) != 0) {
+          memory.update(out, memory(arg2))
+        }
+        case SETN => if(memory(arg1) == 0) {
+          memory.update(out, memory(arg2))
+        }
         case ADD => memory.update(out, (memory(arg1) + memory(arg2)).toShort)
         case MUL => memory.update(out, (memory(arg1) * memory(arg2)).toShort)
         case LOAD => memory.update(out, memory(arg1))

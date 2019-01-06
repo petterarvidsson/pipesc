@@ -30,6 +30,8 @@ class Plumber {
     val unrolledArguments = f.arguments.map {
       case f: FunctionApplication =>
         unroll(f, arguments, functions)
+      case f: IfStatement =>
+        NativeIfStatement(unroll(f.cond, arguments, functions), unroll(f.`then`, arguments, functions), unroll(f.`else`, arguments, functions))
       case Value(identifier) =>
         arguments(identifier)
       case c: Constant => c
@@ -49,6 +51,8 @@ class Plumber {
       case Value(identifier) => arguments(identifier)
       case f: FunctionApplication =>
         unroll(f, arguments, functions)
+      case f: IfStatement =>
+        NativeIfStatement(unroll(f.cond, arguments, functions), unroll(f.`then`, arguments, functions), unroll(f.`else`, arguments, functions))
       case c: Constant => c
     }
   }

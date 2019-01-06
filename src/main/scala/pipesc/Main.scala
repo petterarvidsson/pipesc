@@ -13,7 +13,7 @@ def q(b) =
   predef.add(b, g(1, 2, b, 4))
 
 def main(a, b) =
-  add(q(a),q(b))
+  if(a, add(q(a),q(b)), b)
 """
     println(code)
     PipeLexer.parse(PipeLexer.tokens, code) match {
