@@ -15,11 +15,15 @@ case object Comma extends PipeToken
 case object Dot extends PipeToken
 case object Equals extends PipeToken
 case object Def extends PipeToken
+case object If extends PipeToken
 
 object PipeLexer extends RegexParsers {
   // Tokens
   def kdef = "def" ^^ { _ =>
     Def
+  }
+  def kif = "if" ^^ { _ =>
+    If
   }
   def identifier =
     positioned("""[a-zA-Z_][a-zA-Z0-9_]*""".r ^^ { s =>
@@ -29,6 +33,9 @@ object PipeLexer extends RegexParsers {
     positioned("""[0-9]+""".r ^^ { s =>
       IntNum(s.toInt)
     })
+  def dot = "." ^^ { _ =>
+    Dot
+  }
   def open = "(" ^^ { _ =>
     Open
   }
@@ -45,7 +52,7 @@ object PipeLexer extends RegexParsers {
     NewLine
   }
   def tokens: Parser[List[PipeToken]] = {
-    phrase(rep1(intnum | kdef | identifier | open | close | comma | equals | newline)) ^^ { r =>
+    phrase(rep1(intnum | kdef | kif | identifier | dot | open | close | comma | equals | newline)) ^^ { r =>
       r
     }
   }
