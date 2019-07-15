@@ -1,20 +1,17 @@
 package pipesc
 
+import scala.io.Source
 import java.io.FileOutputStream
 import scala.util.parsing.combinator._
 
 object Main {
   def main(args: Array[String]) {
     val plumber = new Plumber()
-    val code = """
-def g(a, b, c, d) = mul(add(a, b), add(d, c))
-
-def q(b) =
-  predef.add(b, g(1, 2, b, 4))
-
-def main(a, b) =
-  if(a, add(q(a),q(b)), b)
-"""
+    if(args.size != 1) {
+      println("Usage: pipesc <source.pipe>")
+      System.exit(1)
+    }
+    val code = Source.fromFile(args(0)).mkString
     println(code)
     PipeLexer.parse(PipeLexer.tokens, code) match {
       case PipeLexer.NoSuccess(msg, next) => println(msg)
