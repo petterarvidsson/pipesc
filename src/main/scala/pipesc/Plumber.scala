@@ -1,13 +1,20 @@
 package pipesc
 
-case class EntryPoint(output: NativePipeStatement, inputs: Set[Value])
+case class UnrolledController(controller: Int, statement: NativePipeStatement, inputs: Set[Value])
+case class UnrolledPipeProgram(controllers: Seq[UnrolledController], knobs: Map[String, KnobDefinition])
 
-object EntryPoint {
-  def prettyPrint(entryPoint: EntryPoint) {
-    val inputs = entryPoint.inputs.map(_.identifier.name).mkString(", ")
-    NativePipeStatement.printIndented(s"entry($inputs) {", 0)
-    NativePipeStatement.prettyPrint(entryPoint.output, 1)
-    NativePipeStatement.printIndented(s"}", 0)
+object UnrolledPipeProgram {
+  def prettyPrint(program: UnrolledPipeProgram) {
+    println("Knobs:")
+    for (knob <- program.knobs) {
+      println(knob)
+    }
+    for (controller <- program.controllers) {
+      val inputs = controller.inputs.map(_.identifier).mkString(", ")
+      NativePipeStatement.printIndented(s"CC${controller.controller}($inputs) {", 0)
+      NativePipeStatement.prettyPrint(controller.statement, 1)
+      NativePipeStatement.printIndented(s"}", 0)
+    }
   }
 }
 
@@ -15,8 +22,8 @@ class Plumber {
 
   def convertArguments(fn: FunctionDefinition,
                        functionArguments: Seq[PipeStatement],
-                       arguments: Map[Identifier, NativePipeStatement],
-                       functions: Map[NSIdentifier, FunctionDefinition]): Map[Identifier, NativePipeStatement] =
+                       arguments: Map[String, NativePipeStatement],
+                       functions: Map[NSIdentifier, FunctionDefinition]): Map[String, NativePipeStatement] =
     fn.arguments.zip(functionArguments) map {
       case (identifier, Value(oldIdentifier)) =>
         identifier -> arguments(oldIdentifier)
@@ -25,13 +32,15 @@ class Plumber {
     } toMap
 
   def unroll(f: FunctionApplication,
-             arguments: Map[Identifier, NativePipeStatement],
+             arguments: Map[String, NativePipeStatement],
              functions: Map[NSIdentifier, FunctionDefinition]): NativePipeStatement = {
     val unrolledArguments = f.arguments.map {
       case f: FunctionApplication =>
         unroll(f, arguments, functions)
       case f: IfStatement =>
-        NativeIfStatement(unroll(f.cond, arguments, functions), unroll(f.`then`, arguments, functions), unroll(f.`else`, arguments, functions))
+        NativeIfStatement(unroll(f.cond, arguments, functions),
+                          unroll(f.`then`, arguments, functions),
+                          unroll(f.`else`, arguments, functions))
       case Value(identifier) =>
         arguments(identifier)
       case c: Constant => c
@@ -45,31 +54,42 @@ class Plumber {
   }
 
   def unroll(statement: PipeStatement,
-             arguments: Map[Identifier, NativePipeStatement],
+             arguments: Map[String, NativePipeStatement],
              functions: Map[NSIdentifier, FunctionDefinition]): NativePipeStatement = {
     statement match {
       case Value(identifier) => arguments(identifier)
       case f: FunctionApplication =>
         unroll(f, arguments, functions)
       case f: IfStatement =>
-        NativeIfStatement(unroll(f.cond, arguments, functions), unroll(f.`then`, arguments, functions), unroll(f.`else`, arguments, functions))
+        NativeIfStatement(unroll(f.cond, arguments, functions),
+                          unroll(f.`then`, arguments, functions),
+                          unroll(f.`else`, arguments, functions))
       case c: Constant => c
     }
   }
 
   def unroll(fn: FunctionDefinition,
-             arguments: Map[Identifier, NativePipeStatement],
+             arguments: Map[String, NativePipeStatement],
              functions: Map[NSIdentifier, FunctionDefinition]): NativePipeStatement = {
     unroll(fn.statement, arguments, functions)
   }
 
-  def unroll(entryPoint: NSIdentifier, functions: Map[NSIdentifier, FunctionDefinition]): EntryPoint = {
-    val entry = functions(entryPoint)
-    val arguments =  entry.arguments.map { identifier =>
-      (identifier,  Value(identifier))
-    } toMap
+  def unroll(controller: MidiControllerDefinition,
+             arguments: Map[String, NativePipeStatement],
+             functions: Map[NSIdentifier, FunctionDefinition]): NativePipeStatement = {
+    unroll(controller.statement, arguments, functions)
+  }
 
-    //require(entry.arguments.size == 0, s"Entry point: ${entryPoint.name} must have 0 arguments")
-    EntryPoint(unroll(entry, arguments, functions), arguments.values.toSet)
+  def unroll(program: PipeProgram): UnrolledPipeProgram = {
+    UnrolledPipeProgram(
+      for (controller <- program.controllers) yield {
+        val arguments = controller.arguments.map { identifier =>
+          (identifier, Value(identifier))
+        } toMap
+        val statement = unroll(controller, arguments, program.functions)
+        UnrolledController(controller.controller, statement, arguments.values.toSet)
+      },
+      program.knobs
+    )
   }
 }

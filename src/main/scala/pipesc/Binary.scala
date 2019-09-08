@@ -35,9 +35,8 @@ object Binary {
 
   def binaryEncode(program: Program): ByteBuffer =
     binaryEncodeProgram(ByteBuffer
-      .allocate(512)
-      .order(ByteOrder.BIG_ENDIAN),
-      program
-    )
+                          .allocate(512)
+                          .order(ByteOrder.BIG_ENDIAN),
+                        program)
 
 }

@@ -43,15 +43,26 @@ object Fragment {
     Fragment(Seq(instruction), offset)
 }
 
-case class Program(instructions: Seq[Instruction], values: Map[Identifier, Int], stackSize: Int)
+case class Program(instructions: Seq[Instruction], stackSize: Int, knobs: Map[Int, KnobDefinition])
+
 object Program {
+  def prettyPrint(key: String, knob: KnobDefinition, indentation: Int) {
+    NativePipeStatement.printIndented(s"$key: $knob", indentation)
+  }
+
   def prettyPrint(program: Program) {
     println(s"Stack size: ${program.stackSize}")
-    for(v <- program.values) {
-      println(v)
+    println(s"Knobs:")
+    for ((key, knob) <- program.knobs) {
+      prettyPrint(key, knob, 2)
     }
-    for(i <- program.instructions) {
-      println(i)
+    println("Values:")
+    for ((k, v) <- program.values) {
+      NativePipeStatement.printIndented(s"$k: $v", 2)
+    }
+    println("Instructions:")
+    for (i <- program.instructions) {
+      NativePipeStatement.printIndented(i, 2)
     }
   }
 
@@ -61,7 +72,7 @@ object Assembler {
 
   import Instruction._
 
-  def assemble(statement: NativePipeStatement, offset: Int, values: Map[Identifier, Int]): Fragment =
+  def assemble(statement: NativePipeStatement, offset: Int, values: Map[String, Int]): Fragment =
     statement match {
       case NativeFunctionApplication(identifier, arg1, arg2) =>
         val outOffset = offset
@@ -69,7 +80,8 @@ object Assembler {
         val arg1Fragment = assemble(arg1, arg1Offset, values)
         val arg2Offset = offset + 2
         val arg2Fragment = assemble(arg2, arg2Offset, values)
-        arg1Fragment ++ arg2Fragment ++ Fragment(BinaryInstruction(i2o(identifier), arg1Offset, arg2Offset, outOffset), arg2Offset)
+        arg1Fragment ++ arg2Fragment ++ Fragment(BinaryInstruction(i2o(identifier), arg1Offset, arg2Offset, outOffset),
+                                                 arg2Offset)
       case NativeIfStatement(c, t, e) =>
         val outOffset = offset
         val condOffset = offset + 1
@@ -78,18 +90,24 @@ object Assembler {
         val thenFragment = assemble(t, thenOffset, values)
         val elseOffset = offset + 3
         val elseFragment = assemble(e, elseOffset, values)
-        condFragment ++ thenFragment ++ elseFragment ++ Fragment(Seq(BinaryInstruction(SET, condOffset, thenOffset, outOffset), BinaryInstruction(SETN, condOffset, elseOffset, outOffset)), elseOffset)
+        condFragment ++ thenFragment ++ elseFragment ++ Fragment(
+          Seq(BinaryInstruction(SET, condOffset, thenOffset, outOffset),
+              BinaryInstruction(SETN, condOffset, elseOffset, outOffset)),
+          elseOffset)
       case constant: Constant =>
         Fragment(NullaryInstruction(CNT, constant, offset), offset)
       case Value(identifier) =>
         Fragment(UnaryInstruction(LOAD, values(identifier), offset), offset)
     }
 
-  def assemble(entry: EntryPoint): Program = {
-    val stackOffset = entry.inputs.size
-    val valueMapping = entry.inputs.map(_.identifier).zipWithIndex.toMap
-    val fragment = assemble(entry.output, stackOffset, valueMapping)
-    Program(fragment.instructions, valueMapping, fragment.maxOffset + 1)
+  def assemble(unrolledProgram: UnrolledPipeProgram): Program = {
+    val valueMapping = unrolledProgram.controllers.flatMap(_.inputs.map(_.identifier)).toSet.zipWithIndex.toMap
+    val controllers = for ((controller, i) <- unrolledProgram.controllers.zipWithIndex) yield {
+      val stackOffset = valueMapping.size + i
+      val fragment = assemble(controller.statement, stackOffset, valueMapping)
+      (fragment.instructions, fragment.maxOffset + 1)
+    }
+    Program(controllers.map(_._1).flatten, valueMapping, controllers.map(_._2).max, unrolledProgram.knobs)
   }
 
 }
