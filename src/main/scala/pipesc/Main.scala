@@ -26,20 +26,22 @@ object Main {
             UnrolledPipeProgram.prettyPrint(unrolledProgram)
             val program = Assembler.assemble(unrolledProgram)
             Program.prettyPrint(program)
-            println(VM.run(program, "cut_off" -> 2, "resonance" -> 4).toSeq)
+            println(VM.run(program, "Cut Off" -> 2, "Resonance" -> 4).toSeq)
             val binary = Binary.binaryEncode(program)
+            val size = binary.position
+
+            // Run binary program
             binary.rewind()
-            val instructions = binary.getInt() * 8
-            val bytes = Array.ofDim[Byte](instructions)
-            binary.get(bytes)
-            val stackSize = binary.getShort()
-            println(VM.run(bytes, stackSize, Array[Short](2, 4)).toSeq)
+            println(VM.run(binary, "Cut Off" -> 2.toShort, "Resonance" -> 4.toShort).toSeq)
+
+            // Write binary to file
             binary.rewind()
             val stream = new FileOutputStream("program.bin")
-            val fileBytes = Array.ofDim[Byte](4 + instructions + 2)
+            val fileBytes = Array.ofDim[Byte](size)
             binary.get(fileBytes)
             stream.write(fileBytes);
             stream.close()
+
         }
     }
 

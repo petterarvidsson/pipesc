@@ -1,7 +1,7 @@
 package pipesc
 
 case class UnrolledController(controller: Int, statement: NativePipeStatement, inputs: Set[Value])
-case class UnrolledPipeProgram(controllers: Seq[UnrolledController], knobs: Map[String, KnobDefinition])
+case class UnrolledPipeProgram(controllers: Seq[UnrolledController], knobs: Map[String, KnobDefinition], groups: Map[String, GroupDefinition])
 
 object UnrolledPipeProgram {
   def prettyPrint(program: UnrolledPipeProgram) {
@@ -89,7 +89,8 @@ class Plumber {
         val statement = unroll(controller, arguments, program.functions)
         UnrolledController(controller.controller, statement, arguments.values.toSet)
       },
-      program.knobs
+      program.knobs,
+      program.groups
     )
   }
 }

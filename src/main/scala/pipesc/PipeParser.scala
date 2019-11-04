@@ -12,8 +12,15 @@ case class NSIdentifier(namespace: Seq[String], identifier: String) extends Posi
 
 case class PipeProgram(controllers: Seq[MidiControllerDefinition],
                        knobs: Map[String, KnobDefinition],
+                       groups: Map[String, GroupDefinition],
                        functions: Map[NSIdentifier, FunctionDefinition]) {
   locally {
+    for {
+      knob <- knobs.values
+    } {
+      require(groups.contains(knob.groupIdentifier), s"No such group ${knob.groupIdentifier} defined for knob ${knob.identifier}")
+    }
+
     for {
       controller <- controllers
       argument <- controller.arguments
@@ -87,7 +94,7 @@ case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], 
     )
   }
 }
-case class KnobDefinition(identifier: String, description: Text, from: IntNum, to: IntNum)
+case class KnobDefinition(identifier: String, groupIdentifier: String, row: Int, column: Int, description: Text, from: Int, to: Int)
 case class MidiControllerDefinition(controller: Int, arguments: Seq[String], statement: PipeStatement) {
   for {
     v <- PipeStatement.values(statement)
@@ -98,7 +105,7 @@ case class MidiControllerDefinition(controller: Int, arguments: Seq[String], sta
     )
   }
 }
-
+case class GroupDefinition(identifier: String, description: Text, rowFrom: Int, columnFrom: Int, rowTo: Int, columnTo: Int)
 object PipeParser extends Parsers {
   override type Elem = PipeToken
 
@@ -123,6 +130,8 @@ object PipeParser extends Parsers {
   def equals = positioned(accept("equals", { case e: Equals => e }))
 
   def knob = positioned(accept("knob", { case k: Knob => k }))
+
+  def group = positioned(accept("group", { case g: Group => g }))
 
   def midicontroller = positioned(accept("midicontroller", { case m: MidiController => m }))
 
@@ -163,9 +172,15 @@ object PipeParser extends Parsers {
       })
 
   def knobDef =
-    positioned(knob ~ identifier ~ open ~ text ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
-      case _ ~ i ~ _ ~ description ~ _ ~ from ~ _ ~ to ~ _ =>
-        Positioned(KnobDefinition(i.name, description, from.value, to.value))
+    positioned(knob ~ identifier ~ open ~ identifier ~ comma ~ constant ~ comma ~ constant ~ comma ~ text ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
+      case _ ~ i ~ _ ~ g ~ _ ~ row ~ _ ~ column ~ _ ~ description ~ _ ~ from ~ _ ~ to ~ _ =>
+        Positioned(KnobDefinition(i.name, g.name, row.value.value, column.value.value, description, from.value.value, to.value.value))
+    })
+
+  def groupDef =
+    positioned(group ~ identifier ~ open ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant~ close ^^ {
+      case _ ~ i ~ _ ~ description ~ _ ~ fromRow ~ _ ~ fromColumn ~ _ ~ toRow ~ _ ~ toColumn ~ _ =>
+          Positioned(GroupDefinition(i.name, description, fromRow.value.value, fromColumn.value.value, toRow.value.value, toColumn.value.value))
     })
 
   def midiControllerDef(namespaceSeq: Seq[String]) =
@@ -191,7 +206,7 @@ object PipeParser extends Parsers {
     positioned(ifa(namespaceSeq) | fn(namespaceSeq) | constant | value)
 
   def file(namespaceSeq: Seq[String]): Parser[Positioned[PipeProgram]] =
-    positioned(phrase(rep1(knobDef | midiControllerDef(namespaceSeq) | fnDef(namespaceSeq) | newline)) ^^ { r =>
+    positioned(phrase(rep1(knobDef | midiControllerDef(namespaceSeq) | fnDef(namespaceSeq) | groupDef | newline)) ^^ { r =>
       Positioned(
         PipeProgram(
           r.collect {
@@ -199,6 +214,9 @@ object PipeParser extends Parsers {
           },
           Map(r.collect {
             case Positioned(knob: KnobDefinition) => knob.identifier -> knob
+          }: _*),
+          Map(r.collect {
+            case Positioned(group: GroupDefinition) => group.identifier -> group
           }: _*),
           Map(r.collect {
             case Positioned(fn: FunctionDefinition) => fn.identifier -> fn

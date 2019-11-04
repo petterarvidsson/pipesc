@@ -48,7 +48,8 @@ object PipeLexer extends RegexParsers {
     })
   def text =
     positioned("""\"[a-zA-Z_0-9\s-]*\"""".r ^^ { s =>
-      Text(s.toString)
+      val str = s.toString
+      Text(str.slice(1, str.length - 1))
     })
   def identifier =
     positioned("""[a-zA-Z_][a-zA-Z0-9_]*""".r ^^ { s =>

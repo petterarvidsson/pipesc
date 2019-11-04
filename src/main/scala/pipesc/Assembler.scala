@@ -43,10 +43,15 @@ object Fragment {
     Fragment(Seq(instruction), offset)
 }
 
-case class Program(instructions: Seq[Instruction], stackSize: Int, knobs: Map[Int, KnobDefinition])
+case class Program(instructions: Seq[Instruction], stackSize: Int, knobs: Map[Int, InputKnob], groups: Map[Int, GroupDefinition], controllers: Map[Int, Int])
+case class InputKnob(group: Int, row: Int, column: Int, description: Text, from: Int, to: Int)
+object InputKnob {
+  def apply(group: Int, knob: KnobDefinition): InputKnob =
+    apply(group, knob.row, knob.column, knob.description, knob.from, knob.to)
+}
 
 object Program {
-  def prettyPrint(key: String, knob: KnobDefinition, indentation: Int) {
+  def prettyPrint(key: Int, knob: InputKnob, indentation: Int) {
     NativePipeStatement.printIndented(s"$key: $knob", indentation)
   }
 
@@ -56,13 +61,17 @@ object Program {
     for ((key, knob) <- program.knobs) {
       prettyPrint(key, knob, 2)
     }
-    println("Values:")
-    for ((k, v) <- program.values) {
+    println("Groups:")
+    for ((k, v) <- program.groups) {
       NativePipeStatement.printIndented(s"$k: $v", 2)
     }
     println("Instructions:")
     for (i <- program.instructions) {
       NativePipeStatement.printIndented(i, 2)
+    }
+    println("Controllers:")
+    for ((k, v) <- program.controllers) {
+      NativePipeStatement.printIndented(s"$k: $v", 2)
     }
   }
 
@@ -102,12 +111,19 @@ object Assembler {
 
   def assemble(unrolledProgram: UnrolledPipeProgram): Program = {
     val valueMapping = unrolledProgram.controllers.flatMap(_.inputs.map(_.identifier)).toSet.zipWithIndex.toMap
+    val groupMapping = unrolledProgram.groups.keySet.zipWithIndex.toMap
     val controllers = for ((controller, i) <- unrolledProgram.controllers.zipWithIndex) yield {
       val stackOffset = valueMapping.size + i
       val fragment = assemble(controller.statement, stackOffset, valueMapping)
-      (fragment.instructions, fragment.maxOffset + 1)
+      (stackOffset, fragment.instructions, fragment.maxOffset + 1, controller.controller)
     }
-    Program(controllers.map(_._1).flatten, valueMapping, controllers.map(_._2).max, unrolledProgram.knobs)
+    val knobs = unrolledProgram.knobs.map {
+      case (id, knob) => valueMapping(id) -> InputKnob(groupMapping(knob.groupIdentifier), knob)
+    }
+    val groups = unrolledProgram.groups.map {
+      case (id, group) => groupMapping(id) -> group
+    }
+    Program(controllers.map(_._2).flatten, controllers.map(_._3).max, knobs, groups, controllers.map(c => c._1 -> c._4).toMap)
   }
 
 }
