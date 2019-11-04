@@ -53,13 +53,13 @@ object VM {
     binary.get(program)
 
     // Get stack size exponent
-    val stackSize = binary.getShort()
+    val stackSize = binary.get()
 
     // Allocate stack
     val memory = Array.ofDim[Short](math.pow(2, stackSize).toInt)
 
     // Get number of groups
-    val numberOfGroups = binary.getShort()
+    val numberOfGroups = binary.get()
 
     // Read and discard all groups
     for(i <- 0 until numberOfGroups) {
@@ -73,8 +73,8 @@ object VM {
       val description = new String(descriptionBytes, StandardCharsets.UTF_8)
     }
 
-    // Get number of knobss
-    val numberOfKnobs = binary.getShort()
+    // Get number of knobs
+    val numberOfKnobs = binary.get()
 
     // Read all knobs and set arguments based on which knob they controll
     for(i <- 0 until numberOfKnobs) {

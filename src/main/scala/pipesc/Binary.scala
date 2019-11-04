@@ -5,14 +5,14 @@ import java.nio.{ByteBuffer, ByteOrder}
 /**
   * Format:
   * | 16 bits: <format version> 0 |
-  * | 16 bits: <number of instructions>|
+  * | 32 bits: <number of instructions>|
   * x | 4 x 16 bits: <instruction> |
-  * | 16 bits: <stack size>|
-  * | 16 bits: <number of groups> |
+  * | 8 bits: <stack size> |
+  * | 8 bits: <number of groups> |
   * x | 4 x 8 bits: <row from> <column from> <row to> <column to> |
   * x | 8 bits: <description length>
   * x x | <description> |
-  * | 16 bits: <number of knobs> |
+  * | 8 bits: <number of knobs> |
   * x | 2 x 8 bits: <row> <column> |
   * x | 8 bits: <description length>
   * x x | <description> |
@@ -60,7 +60,7 @@ object Binary {
       .put(group.description.text.getBytes("UTF-8"))
 
   private def binaryEncodeGroups(buffer: ByteBuffer, groups: Seq[GroupDefinition]): ByteBuffer =
-    groups.foldLeft(buffer.putShort(groups.size.toShort))(binaryEncode(_ ,_))
+    groups.foldLeft(buffer.put(groups.size.toByte))(binaryEncode(_ ,_))
 
   private def binaryEncode(buffer: ByteBuffer, knob: InputKnob): ByteBuffer =
     buffer
@@ -70,7 +70,7 @@ object Binary {
       .put(knob.description.text.getBytes("UTF-8"))
 
   private def binaryEncodeKnobs(buffer: ByteBuffer, knobs: Seq[InputKnob]): ByteBuffer =
-    knobs.foldLeft(buffer.putShort(knobs.size.toShort))(binaryEncode(_ ,_))
+    knobs.foldLeft(buffer.put(knobs.size.toByte))(binaryEncode(_ ,_))
 
   private def binaryEncode(buffer: ByteBuffer, cc: (Int, Int)): ByteBuffer =
     buffer
@@ -85,7 +85,7 @@ object Binary {
       binaryEncodeKnobs(
         binaryEncodeGroups(
           binaryEncodeInstructions(buffer.putShort(CurrentVersion), program.instructions)
-            .putShort(math.ceil(math.log(program.stackSize) / math.log(2)).toShort),
+            .put(math.ceil(math.log(program.stackSize) / math.log(2)).toByte),
           program.groups.toSeq.sortBy(_._1).map(_._2)
         ),
         program.knobs.toSeq.sortBy(_._1).map(_._2)
