@@ -41,8 +41,7 @@ object Binary {
       case NullaryInstruction(opcode, Constant(IntNum(value)), out) =>
         buffer
           .putShort(opcode.toShort)
-          .putShort(value.toShort)
-          .putShort(0)
+          .putInt(value)
           .putShort(out.toShort)
     }
 

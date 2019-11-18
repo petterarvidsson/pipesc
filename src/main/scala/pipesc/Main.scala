@@ -32,7 +32,7 @@ object Main {
 
             // Run binary program
             binary.rewind()
-            println(VM.run(binary, "Cut Off" -> 2.toShort, "Resonance" -> 4.toShort).toSeq)
+            println(VM.run(binary, "Cut Off" -> 2, "Resonance" -> 4).toSeq)
 
             // Write binary to file
             binary.rewind()

@@ -42,7 +42,7 @@ object VM {
     memory
   }
 
-  def run(binary: ByteBuffer, args: (String, Short)*): Map[Short, Short] = {
+  def run(binary: ByteBuffer, args: (String, Int)*): Map[Short, Int] = {
     val argMap = Map(args: _*)
 
     binary.getShort() // Discard version header
@@ -56,7 +56,7 @@ object VM {
     val stackSize = binary.get()
 
     // Allocate stack
-    val memory = Array.ofDim[Short](math.pow(2, stackSize).toInt)
+    val memory = Array.ofDim[Int](math.pow(2, stackSize).toInt)
 
     // Get number of groups
     val numberOfGroups = binary.get()
@@ -101,6 +101,8 @@ object VM {
       val opcode = buffer.getShort()
       val arg1 = buffer.getShort()
       val arg2 = buffer.getShort()
+      buffer.position(buffer.position - 4)
+      val arg = buffer.getInt()
       val out = buffer.getShort()
       opcode match {
         case SET =>
@@ -111,8 +113,8 @@ object VM {
           if (memory(arg1) == 0) {
             memory.update(out, memory(arg2))
           }
-        case ADD  => memory.update(out, (memory(arg1) + memory(arg2)).toShort)
-        case MUL  => memory.update(out, (memory(arg1) * memory(arg2)).toShort)
+        case ADD  => memory.update(out, (memory(arg1) + memory(arg2)))
+        case MUL  => memory.update(out, (memory(arg1) * memory(arg2)))
         case LOAD => memory.update(out, memory(arg1))
         case CNT  => memory.update(out, arg1)
       }
