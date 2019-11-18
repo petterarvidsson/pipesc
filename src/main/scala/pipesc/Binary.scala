@@ -14,6 +14,8 @@ import java.nio.{ByteBuffer, ByteOrder}
   * x x | <description> |
   * | 8 bits: <number of knobs> |
   * x | 2 x 8 bits: <row> <column> |
+  * x | 2 x 32 bits: <min> <max> |
+  * x | 32 bits: <step> |
   * x | 8 bits: <description length>
   * x x | <description> |
   * | 16 bits: <number of controllers> |
@@ -65,6 +67,9 @@ object Binary {
     buffer
       .put(knob.row.toByte)
       .put(knob.column.toByte)
+      .putInt(knob.min)
+      .putInt(knob.max)
+      .putInt(knob.step)
       .put(knob.description.text.length.toByte)
       .put(knob.description.text.getBytes("UTF-8"))
 

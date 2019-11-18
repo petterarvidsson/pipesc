@@ -80,6 +80,10 @@ object VM {
     for(i <- 0 until numberOfKnobs) {
       val row = binary.get()
       val column = binary.get()
+      val min = binary.getInt()
+      val max = binary.getInt()
+      val step = binary.getInt()
+
       val descriptionLength = binary.get()
       val descriptionBytes = Array.ofDim[Byte](descriptionLength)
       binary.get(descriptionBytes)

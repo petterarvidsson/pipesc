@@ -44,10 +44,10 @@ object Fragment {
 }
 
 case class Program(instructions: Seq[Instruction], stackSize: Int, knobs: Map[Int, InputKnob], groups: Map[Int, GroupDefinition], controllers: Map[Int, Int])
-case class InputKnob(group: Int, row: Int, column: Int, description: Text, from: Int, to: Int)
+case class InputKnob(group: Int, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
 object InputKnob {
   def apply(group: Int, knob: KnobDefinition): InputKnob =
-    apply(group, knob.row, knob.column, knob.description, knob.from, knob.to)
+    apply(group, knob.row, knob.column, knob.description, knob.min, knob.max, knob.step)
 }
 
 object Program {

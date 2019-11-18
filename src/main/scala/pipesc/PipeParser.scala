@@ -94,7 +94,7 @@ case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], 
     )
   }
 }
-case class KnobDefinition(identifier: String, groupIdentifier: String, row: Int, column: Int, description: Text, from: Int, to: Int)
+case class KnobDefinition(identifier: String, groupIdentifier: String, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
 case class MidiControllerDefinition(controller: Int, arguments: Seq[String], statement: PipeStatement) {
   for {
     v <- PipeStatement.values(statement)
@@ -172,9 +172,9 @@ object PipeParser extends Parsers {
       })
 
   def knobDef =
-    positioned(knob ~ identifier ~ open ~ identifier ~ comma ~ constant ~ comma ~ constant ~ comma ~ text ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
-      case _ ~ i ~ _ ~ g ~ _ ~ row ~ _ ~ column ~ _ ~ description ~ _ ~ from ~ _ ~ to ~ _ =>
-        Positioned(KnobDefinition(i.name, g.name, row.value.value, column.value.value, description, from.value.value, to.value.value))
+    positioned(knob ~ identifier ~ open ~ identifier ~ comma ~ constant ~ comma ~ constant ~ comma ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
+      case _ ~ i ~ _ ~ g ~ _ ~ row ~ _ ~ column ~ _ ~ description ~ _ ~ min ~ _ ~ max ~ _ ~ step ~ _ =>
+        Positioned(KnobDefinition(i.name, g.name, row.value.value, column.value.value, description, min.value.value, max.value.value, step.value.value))
     })
 
   def groupDef =
