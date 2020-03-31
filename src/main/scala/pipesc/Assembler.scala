@@ -105,7 +105,7 @@ object Assembler {
           elseOffset)
       case constant: Constant =>
         Fragment(NullaryInstruction(CNT, constant, offset), offset)
-      case Value(identifier) =>
+      case KnobDefinition(identifier, _, _, _, _, _, _, _) =>
         Fragment(UnaryInstruction(LOAD, values(identifier), offset), offset)
     }
 

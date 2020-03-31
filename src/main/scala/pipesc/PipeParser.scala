@@ -57,8 +57,8 @@ object NativePipeStatement {
   }
   def prettyPrint(statement: NativePipeStatement, indentation: Int) {
     statement match {
-      case v: Value =>
-        printIndented(v, indentation)
+      case KnobDefinition(identifier, _, _, _, _, _, _, _) =>
+        printIndented(identifier, indentation)
       case NativeFunctionApplication(identifier, arg1, arg2) =>
         printIndented(s"${identifier.name}(", indentation)
         prettyPrint(arg1, indentation + 2)
@@ -78,7 +78,7 @@ object NativePipeStatement {
 }
 case class FunctionApplication(identifier: NSIdentifier, arguments: Seq[PipeStatement]) extends PipeStatement
 case class IfStatement(cond: PipeStatement, `then`: PipeStatement, `else`: PipeStatement) extends PipeStatement
-case class Value(identifier: String) extends PipeStatement with NativePipeStatement
+case class Value(identifier: String) extends PipeStatement
 case class Constant(value: IntNum) extends PipeStatement with NativePipeStatement
 case class NativeFunctionApplication(identifier: NSIdentifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
     extends NativePipeStatement
@@ -94,7 +94,7 @@ case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], 
     )
   }
 }
-case class KnobDefinition(identifier: String, groupIdentifier: String, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
+case class KnobDefinition(identifier: String, groupIdentifier: String, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int) extends NativePipeStatement
 case class MidiControllerDefinition(controller: Int, arguments: Seq[String], statement: PipeStatement) {
   for {
     v <- PipeStatement.values(statement)

@@ -1,6 +1,6 @@
 package pipesc
 
-case class UnrolledController(controller: Int, statement: NativePipeStatement, inputs: Set[Value])
+case class UnrolledController(controller: Int, statement: NativePipeStatement, inputs: Set[KnobDefinition])
 case class UnrolledPipeProgram(controllers: Seq[UnrolledController], knobs: Map[String, KnobDefinition], groups: Map[String, GroupDefinition])
 
 object UnrolledPipeProgram {
@@ -84,7 +84,7 @@ class Plumber {
     UnrolledPipeProgram(
       for (controller <- program.controllers) yield {
         val arguments = controller.arguments.map { identifier =>
-          (identifier, Value(identifier))
+          (identifier, program.knobs(identifier))
         } toMap
         val statement = unroll(controller, arguments, program.functions)
         UnrolledController(controller.controller, statement, arguments.values.toSet)
