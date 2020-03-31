@@ -56,7 +56,7 @@ object PipeLexer extends RegexParsers {
       Identifier(s.toString)
     })
   def intnum =
-    positioned("""[0-9]+""".r ^^ { s =>
+    positioned("""-?[0-9]+""".r ^^ { s =>
       IntNum(s.toInt)
     })
   def dot =

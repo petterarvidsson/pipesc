@@ -13,6 +13,7 @@ import java.nio.{ByteBuffer, ByteOrder}
   * x | 8 bits: <description length>
   * x x | <description> |
   * | 8 bits: <number of knobs> |
+  * x | 8 bits: <group>
   * x | 2 x 8 bits: <row> <column> |
   * x | 2 x 32 bits: <min> <max> |
   * x | 32 bits: <step> |
@@ -65,6 +66,7 @@ object Binary {
 
   private def binaryEncode(buffer: ByteBuffer, knob: InputKnob): ByteBuffer =
     buffer
+      .put(knob.group.toByte)
       .put(knob.row.toByte)
       .put(knob.column.toByte)
       .putInt(knob.min)

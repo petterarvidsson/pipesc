@@ -78,6 +78,7 @@ object VM {
 
     // Read all knobs and set arguments based on which knob they controll
     for(i <- 0 until numberOfKnobs) {
+      val group = binary.get()
       val row = binary.get()
       val column = binary.get()
       val min = binary.getInt()
