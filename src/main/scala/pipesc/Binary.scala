@@ -23,7 +23,6 @@ import java.nio.{ByteBuffer, ByteOrder}
   * x | 16 bits: <memory offset> |
   * x | 16 bits: <CC#> |
   */
-
 object Binary {
   val CurrentVersion = 0.toShort
 
@@ -48,7 +47,6 @@ object Binary {
           .putShort(out.toShort)
     }
 
-
   private def binaryEncodeInstructions(buffer: ByteBuffer, instructions: Seq[Instruction]): ByteBuffer =
     instructions.foldLeft(buffer.putInt(instructions.size))(binaryEncode(_, _))
 
@@ -62,7 +60,7 @@ object Binary {
       .put(group.description.text.getBytes("UTF-8"))
 
   private def binaryEncodeGroups(buffer: ByteBuffer, groups: Seq[GroupDefinition]): ByteBuffer =
-    groups.foldLeft(buffer.put(groups.size.toByte))(binaryEncode(_ ,_))
+    groups.foldLeft(buffer.put(groups.size.toByte))(binaryEncode(_, _))
 
   private def binaryEncode(buffer: ByteBuffer, knob: InputKnob): ByteBuffer =
     buffer
@@ -76,7 +74,7 @@ object Binary {
       .put(knob.description.text.getBytes("UTF-8"))
 
   private def binaryEncodeKnobs(buffer: ByteBuffer, knobs: Seq[InputKnob]): ByteBuffer =
-    knobs.foldLeft(buffer.put(knobs.size.toByte))(binaryEncode(_ ,_))
+    knobs.foldLeft(buffer.put(knobs.size.toByte))(binaryEncode(_, _))
 
   private def binaryEncode(buffer: ByteBuffer, cc: (Int, Int)): ByteBuffer =
     buffer
@@ -84,7 +82,7 @@ object Binary {
       .putShort(cc._2.toShort)
 
   private def binaryEncodeControllers(buffer: ByteBuffer, controllers: Seq[(Int, Int)]): ByteBuffer =
-    controllers.foldLeft(buffer.putShort(controllers.size.toShort))(binaryEncode(_ ,_))
+    controllers.foldLeft(buffer.putShort(controllers.size.toShort))(binaryEncode(_, _))
 
   private def binaryEncodeProgram(buffer: ByteBuffer, program: Program): ByteBuffer = {
     binaryEncodeControllers(

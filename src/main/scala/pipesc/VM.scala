@@ -28,7 +28,8 @@ object VM {
         case BinaryInstruction(ADD, arg1, arg2, out) => memory.update(out, memory(arg1) + memory(arg2))
         case BinaryInstruction(MUL, arg1, arg2, out) => memory.update(out, memory(arg1) * memory(arg2))
         case BinaryInstruction(SUB, arg1, arg2, out) => memory.update(out, memory(arg1) - memory(arg2))
-        case BinaryInstruction(DIV, arg1, arg2, out) => memory.update(out, memory(arg1) / memory(arg2))
+        case BinaryInstruction(DIV, arg1, arg2, out) =>
+          if (memory(arg2) != 0) memory.update(out, memory(arg1) / memory(arg2))
         case BinaryInstruction(MOD, arg1, arg2, out) => memory.update(out, memory(arg1) % memory(arg2))
         case UnaryInstruction(LOAD, address, out)    => memory.update(out, memory(address))
         case NullaryInstruction(CNT, constant, out)  => memory.update(out, constant.value.value)
@@ -36,7 +37,7 @@ object VM {
     }
 
     println("Result of AST run:")
-    for((index, cc) <- program.controllers) {
+    for ((index, cc) <- program.controllers) {
       println(s"CC$cc = ${memory(index)}")
     }
     memory
@@ -62,7 +63,7 @@ object VM {
     val numberOfGroups = binary.get()
 
     // Read and discard all groups
-    for(i <- 0 until numberOfGroups) {
+    for (i <- 0 until numberOfGroups) {
       val rowFrom = binary.get()
       val columnFrom = binary.get()
       val rowTo = binary.get()
@@ -77,7 +78,7 @@ object VM {
     val numberOfKnobs = binary.get()
 
     // Read all knobs and set arguments based on which knob they controll
-    for(i <- 0 until numberOfKnobs) {
+    for (i <- 0 until numberOfKnobs) {
       val group = binary.get()
       val row = binary.get()
       val column = binary.get()
@@ -95,7 +96,7 @@ object VM {
     val numberOfControllers = binary.getShort()
 
     // Read all controllers
-    val controllers = Map((for(i <- 0 until numberOfControllers) yield {
+    val controllers = Map((for (i <- 0 until numberOfControllers) yield {
       val memoryOffset = binary.getShort()
       val controller = binary.getShort()
       memoryOffset -> controller
@@ -119,14 +120,16 @@ object VM {
             memory.update(out, memory(arg2))
           }
         case ADD  => memory.update(out, (memory(arg1) + memory(arg2)))
+        case SUB  => memory.update(out, (memory(arg1) - memory(arg2)))
         case MUL  => memory.update(out, (memory(arg1) * memory(arg2)))
+        case DIV  => if (memory(arg2) != 0) memory.update(out, (memory(arg1) / memory(arg2)))
         case LOAD => memory.update(out, memory(arg1))
         case CNT  => memory.update(out, arg1)
       }
     }
     memory
 
-    for((memoryOffset, controller) <- controllers) yield {
+    for ((memoryOffset, controller) <- controllers) yield {
       controller -> memory(memoryOffset)
     }
   }

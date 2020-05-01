@@ -95,10 +95,3 @@ object PipeLexer extends RegexParsers {
   override val whiteSpace = "[ \t]+".r
 
 }
-
-class PipeTokenReader(tokens: Seq[PipeToken]) extends Reader[PipeToken] {
-  override def first: PipeToken = tokens.head
-  override def atEnd: Boolean = tokens.isEmpty
-  override def pos: Position = tokens.headOption.map(_.pos).getOrElse(NoPosition)
-  override def rest: Reader[PipeToken] = new PipeTokenReader(tokens.tail)
-}

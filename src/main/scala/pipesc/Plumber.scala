@@ -1,7 +1,9 @@
 package pipesc
 
 case class UnrolledController(controller: Int, statement: NativePipeStatement, inputs: Set[KnobDefinition])
-case class UnrolledPipeProgram(controllers: Seq[UnrolledController], knobs: Map[String, KnobDefinition], groups: Map[String, GroupDefinition])
+case class UnrolledPipeProgram(controllers: Seq[UnrolledController],
+                               knobs: Map[String, KnobDefinition],
+                               groups: Map[String, GroupDefinition])
 
 object UnrolledPipeProgram {
   def prettyPrint(program: UnrolledPipeProgram) {
@@ -16,6 +18,10 @@ object UnrolledPipeProgram {
       NativePipeStatement.printIndented(s"}", 0)
     }
   }
+}
+
+object Plumber {
+  val MidiBounds = MinMax(0, 127)
 }
 
 class Plumber {
@@ -87,6 +93,12 @@ class Plumber {
           (identifier, program.knobs(identifier))
         } toMap
         val statement = unroll(controller, arguments, program.functions)
+        val minMax = statement.minMax
+        if (!Plumber.MidiBounds.withinBounds(statement.minMax)) {
+          println("MIDI controller ${}")
+          NativePipeStatement.prettyPrint(statement, 0)
+          throw new IllegalArgumentException(s"$statement $minMax is out of bounds [${Plumber.MidiBounds}]")
+        }
         UnrolledController(controller.controller, statement, arguments.values.toSet)
       },
       program.knobs,

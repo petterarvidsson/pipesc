@@ -7,31 +7,18 @@ import scala.util.parsing.input.{NoPosition, Position, Positional, Reader}
 case class Positioned[T](value: T) extends Positional
 
 case class NSIdentifier(namespace: Seq[String], identifier: String) extends Positional {
-  def name = namespace.mkString(".") + "." + identifier
+  def name =
+    if (namespace == Seq("predef")) {
+      identifier
+    } else {
+      namespace.mkString(".") + "." + identifier
+    }
 }
 
 case class PipeProgram(controllers: Seq[MidiControllerDefinition],
                        knobs: Map[String, KnobDefinition],
                        groups: Map[String, GroupDefinition],
-                       functions: Map[NSIdentifier, FunctionDefinition]) {
-  locally {
-    for {
-      knob <- knobs.values
-    } {
-      require(groups.contains(knob.groupIdentifier), s"No such group ${knob.groupIdentifier} defined for knob ${knob.identifier}")
-    }
-
-    for {
-      controller <- controllers
-      argument <- controller.arguments
-    } {
-      require(
-        knobs.contains(argument),
-        s"No such knob ${argument} defined for midi controller ${controller.controller}"
-      )
-    }
-  }
-}
+                       functions: Map[NSIdentifier, FunctionDefinition])
 
 sealed trait PipeStatement extends Positional
 
@@ -48,64 +35,95 @@ object PipeStatement {
   }
 }
 
-sealed trait NativePipeStatement extends Positional
+case class MinMax(min: Int, max: Int) {
+  def withinBounds(m: MinMax): Boolean =
+    m.max <= max && m.min >= min
+}
+
+sealed trait NativePipeStatement extends Positional {
+  def minMax: MinMax
+}
 
 object NativePipeStatement {
   def printIndented(s: Any, indentation: Int) {
     val indent = " " * indentation
     println(s"$indent$s")
   }
+
+  def minMax(statement: NativePipeStatement): String =
+    s"[${statement.minMax.min}, ${statement.minMax.max}]"
+
+  def pos(positional: Positional): String =
+    s"${positional.pos}"
+
   def prettyPrint(statement: NativePipeStatement, indentation: Int) {
     statement match {
-      case KnobDefinition(identifier, _, _, _, _, _, _, _) =>
-        printIndented(identifier, indentation)
-      case NativeFunctionApplication(identifier, arg1, arg2) =>
+      case s @ KnobDefinition(identifier, _, _, _, _, _, _, _) =>
+        printIndented(s"$identifier ${minMax(s)} ${pos(s)}", indentation)
+      case s @ NativeFunctionApplication(identifier, arg1, arg2) =>
         printIndented(s"${identifier.name}(", indentation)
         prettyPrint(arg1, indentation + 2)
         prettyPrint(arg2, indentation + 2)
-        printIndented(s")", indentation)
-      case NativeIfStatement(cond, arg1, arg2) =>
+        printIndented(s") ${minMax(s)} ${pos(identifier)}", indentation)
+      case s @ NativeIfStatement(cond, arg1, arg2) =>
         printIndented("if(", indentation)
         prettyPrint(cond, indentation + 2)
         prettyPrint(arg1, indentation + 2)
         prettyPrint(arg2, indentation + 2)
-        printIndented(s")", indentation)
+        printIndented(s") ${minMax(s)} ${pos(s)}", indentation)
       case c: Constant =>
-        printIndented(c, indentation)
+        printIndented(s"${c.value.value} ${minMax(c)} ${pos(c)}", indentation)
     }
   }
 
 }
+
 case class FunctionApplication(identifier: NSIdentifier, arguments: Seq[PipeStatement]) extends PipeStatement
+
 case class IfStatement(cond: PipeStatement, `then`: PipeStatement, `else`: PipeStatement) extends PipeStatement
+
 case class Value(identifier: String) extends PipeStatement
-case class Constant(value: IntNum) extends PipeStatement with NativePipeStatement
+
+case class Constant(value: IntNum) extends PipeStatement with NativePipeStatement {
+  def minMax = MinMax(value.value, value.value)
+}
+
 case class NativeFunctionApplication(identifier: NSIdentifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
-    extends NativePipeStatement
+    extends NativePipeStatement {
+  def minMax = Instruction.i2minMax(identifier)(arg1.minMax, arg2.minMax)
+}
+
 case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatement, `else`: NativePipeStatement)
-    extends NativePipeStatement
-case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], statement: PipeStatement) {
-  for {
-    v <- PipeStatement.values(statement)
-  } {
-    require(
-      arguments.contains(v.identifier),
-      s"${v.identifier} is undefined in function ${identifier}"
-    )
+    extends NativePipeStatement {
+  def minMax = {
+    MinMax(math.min(`then`.minMax.min, `else`.minMax.min), math.max(`then`.minMax.max, `else`.minMax.max))
   }
 }
-case class KnobDefinition(identifier: String, groupIdentifier: String, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int) extends NativePipeStatement
-case class MidiControllerDefinition(controller: Int, arguments: Seq[String], statement: PipeStatement) {
-  for {
-    v <- PipeStatement.values(statement)
-  } {
-    require(
-      arguments.contains(v.identifier),
-      s"${v.identifier} is undefined in definition of midi controller ${controller}"
-    )
-  }
+
+case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], statement: PipeStatement)
+    extends Positional
+
+case class KnobDefinition(identifier: String,
+                          groupIdentifier: String,
+                          row: Int,
+                          column: Int,
+                          description: Text,
+                          min: Int,
+                          max: Int,
+                          step: Int)
+    extends NativePipeStatement {
+  def minMax = MinMax(min, max)
 }
-case class GroupDefinition(identifier: String, description: Text, rowFrom: Int, columnFrom: Int, rowTo: Int, columnTo: Int)
+case class MidiControllerDefinition(controller: Int, arguments: Seq[String], statement: PipeStatement)
+    extends Positional
+
+case class GroupDefinition(identifier: String,
+                           description: Text,
+                           rowFrom: Int,
+                           columnFrom: Int,
+                           rowTo: Int,
+                           columnTo: Int)
+
 object PipeParser extends Parsers {
   override type Elem = PipeToken
 
@@ -164,32 +182,71 @@ object PipeParser extends Parsers {
   def fndefarglist: Parser[Positioned[Seq[Identifier]]] = positioned(repsep(identifier, comma) ^^ (Positioned(_)))
 
   def fnDef(namespaceSeq: Seq[String]) =
-    positioned(
+    positioned {
       `def` ~ namespaceIdentifier(namespaceSeq) ~ open ~ fndefarglist ~ close ~ equals ~ newline.* ~ statement(
-        namespaceSeq) ^^ {
+        namespaceSeq) flatMap {
         case _ ~ i ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
-          Positioned(FunctionDefinition(i, args.value.map(_.name), statement))
-      })
+          val arguments = args.value.map(_.name)
+
+          val unidentified = for {
+            v <- PipeStatement.values(statement) if !arguments.contains(v.identifier)
+          } yield {
+            s"${v.identifier} is undefined in function ${i.name}"
+          }
+
+          if (unidentified.isEmpty) {
+            success(FunctionDefinition(i, arguments, statement))
+          } else {
+            err(unidentified.mkString("\n"))
+          }
+      }
+    }
 
   def knobDef =
-    positioned(knob ~ identifier ~ open ~ identifier ~ comma ~ constant ~ comma ~ constant ~ comma ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
-      case _ ~ i ~ _ ~ g ~ _ ~ row ~ _ ~ column ~ _ ~ description ~ _ ~ min ~ _ ~ max ~ _ ~ step ~ _ =>
-        Positioned(KnobDefinition(i.name, g.name, row.value.value, column.value.value, description, min.value.value, max.value.value, step.value.value))
-    })
+    positioned(
+      knob ~ identifier ~ open ~ identifier ~ comma ~ constant ~ comma ~ constant ~ comma ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
+        case _ ~ i ~ _ ~ g ~ _ ~ row ~ _ ~ column ~ _ ~ description ~ _ ~ min ~ _ ~ max ~ _ ~ step ~ _ =>
+          KnobDefinition(i.name,
+                         g.name,
+                         row.value.value,
+                         column.value.value,
+                         description,
+                         min.value.value,
+                         max.value.value,
+                         step.value.value)
+      })
 
   def groupDef =
-    positioned(group ~ identifier ~ open ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant~ close ^^ {
-      case _ ~ i ~ _ ~ description ~ _ ~ fromRow ~ _ ~ fromColumn ~ _ ~ toRow ~ _ ~ toColumn ~ _ =>
-          Positioned(GroupDefinition(i.name, description, fromRow.value.value, fromColumn.value.value, toRow.value.value, toColumn.value.value))
-    })
+    positioned(
+      group ~ identifier ~ open ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
+        case _ ~ i ~ _ ~ description ~ _ ~ fromRow ~ _ ~ fromColumn ~ _ ~ toRow ~ _ ~ toColumn ~ _ =>
+          Positioned(
+            GroupDefinition(i.name,
+                            description,
+                            fromRow.value.value,
+                            fromColumn.value.value,
+                            toRow.value.value,
+                            toColumn.value.value))
+      })
 
   def midiControllerDef(namespaceSeq: Seq[String]) =
-    positioned(
+    positioned {
       midicontroller ~ open ~ constant ~ close ~ open ~ fndefarglist ~ close ~ equals ~ newline.* ~ statement(
-        namespaceSeq) ^^ {
+        namespaceSeq) flatMap {
         case _ ~ _ ~ controller ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
-          Positioned(MidiControllerDefinition(controller.value.value, args.value.map(_.name), statement))
-      })
+          val arguments = args.value.map(_.name)
+          val unidentified = for {
+            v <- PipeStatement.values(statement) if !arguments.contains(v.identifier)
+          } yield {
+            s"${v.identifier} is undefined in definition of midi controller ${controller.value.value}"
+          }
+          if (unidentified.isEmpty) {
+            success(MidiControllerDefinition(controller.value.value, arguments, statement))
+          } else {
+            err(unidentified.mkString("\n"))
+          }
+      }
+    }
 
   def fn(namespaceSeq: Seq[String]) =
     positioned(namespaceIdentifier(namespaceSeq) ~ open ~ arglist(namespaceSeq) ~ close ^^ {
@@ -205,22 +262,50 @@ object PipeParser extends Parsers {
   def statement(namespaceSeq: Seq[String]): Parser[PipeStatement] =
     positioned(ifa(namespaceSeq) | fn(namespaceSeq) | constant | value)
 
-  def file(namespaceSeq: Seq[String]): Parser[Positioned[PipeProgram]] =
-    positioned(phrase(rep1(knobDef | midiControllerDef(namespaceSeq) | fnDef(namespaceSeq) | groupDef | newline)) ^^ { r =>
-      Positioned(
-        PipeProgram(
-          r.collect {
-            case Positioned(controller: MidiControllerDefinition) => controller
-          },
-          Map(r.collect {
-            case Positioned(knob: KnobDefinition) => knob.identifier -> knob
-          }: _*),
-          Map(r.collect {
-            case Positioned(group: GroupDefinition) => group.identifier -> group
-          }: _*),
-          Map(r.collect {
-            case Positioned(fn: FunctionDefinition) => fn.identifier -> fn
-          }: _*)
-        ))
-    })
+  def file(namespaceSeq: Seq[String]): Parser[PipeProgram] =
+    phrase(rep1(knobDef | midiControllerDef(namespaceSeq) | fnDef(namespaceSeq) | groupDef | newline)) flatMap { defs =>
+      val controllers = defs.collect {
+        case controller: MidiControllerDefinition => controller
+      }
+
+      val knobs = Map(defs.collect {
+        case knob: KnobDefinition => knob.identifier -> knob
+      }: _*)
+
+      val groups = Map(defs.collect {
+        case Positioned(group: GroupDefinition) => group.identifier -> group
+      }: _*)
+
+      val functions = Map(defs.collect {
+        case fn: FunctionDefinition => fn.identifier -> fn
+      }: _*)
+
+      val undefinedGroups = for {
+        knob <- knobs.values if !groups.contains(knob.groupIdentifier)
+      } yield {
+        s"No such group ${knob.groupIdentifier} defined for knob ${knob.identifier}"
+      }
+
+      val undefinedKnobs = for {
+        controller <- controllers
+        argument <- controller.arguments if !knobs.contains(argument)
+      } yield {
+        s"No such knob ${argument} defined for midi controller ${controller.controller}"
+      }
+
+      val undefined = undefinedGroups ++ undefinedKnobs
+
+      if (undefined.isEmpty) {
+        success(PipeProgram(controllers, knobs, groups, functions))
+      } else {
+        err(undefined.mkString("\n"))
+      }
+    }
+}
+
+class PipeTokenReader(tokens: Seq[PipeToken]) extends Reader[PipeToken] {
+  override def first: PipeToken = tokens.head
+  override def atEnd: Boolean = tokens.isEmpty
+  override def pos: Position = tokens.headOption.map(_.pos).getOrElse(NoPosition)
+  override def rest: Reader[PipeToken] = new PipeTokenReader(tokens.tail)
 }

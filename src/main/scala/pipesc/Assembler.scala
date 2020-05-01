@@ -31,6 +31,29 @@ object Instruction {
     NSIdentifier(Predef.NS, Predef.Div) -> DIV,
     NSIdentifier(Predef.NS, Predef.Mod) -> MOD
   )
+
+  def addMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min + m2.min, m1.max + m2.max)
+
+  def subMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min - m2.max, m1.max - m2.min)
+
+  def mulMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min * m2.min, m1.max * m2.max)
+
+  def divMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min / m2.max, m1.max / m2.min)
+
+  def modMinMax(m1: MinMax, m2: MinMax): MinMax =
+    m2
+
+  val i2minMax = Map[NSIdentifier, (MinMax, MinMax) => MinMax](
+    NSIdentifier(Predef.NS, Predef.Add) -> addMinMax,
+    NSIdentifier(Predef.NS, Predef.Sub) -> subMinMax,
+    NSIdentifier(Predef.NS, Predef.Mul) -> mulMinMax,
+    NSIdentifier(Predef.NS, Predef.Div) -> divMinMax,
+    NSIdentifier(Predef.NS, Predef.Mod) -> modMinMax
+  )
 }
 
 case class Fragment(instructions: Seq[Instruction], maxOffset: Int) {
@@ -43,7 +66,11 @@ object Fragment {
     Fragment(Seq(instruction), offset)
 }
 
-case class Program(instructions: Seq[Instruction], stackSize: Int, knobs: Map[Int, InputKnob], groups: Map[Int, GroupDefinition], controllers: Map[Int, Int])
+case class Program(instructions: Seq[Instruction],
+                   stackSize: Int,
+                   knobs: Map[Int, InputKnob],
+                   groups: Map[Int, GroupDefinition],
+                   controllers: Map[Int, Int])
 case class InputKnob(group: Int, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
 object InputKnob {
   def apply(group: Int, knob: KnobDefinition): InputKnob =
@@ -123,7 +150,11 @@ object Assembler {
     val groups = unrolledProgram.groups.map {
       case (id, group) => groupMapping(id) -> group
     }
-    Program(controllers.map(_._2).flatten, controllers.map(_._3).max, knobs, groups, controllers.map(c => c._1 -> c._4).toMap)
+    Program(controllers.map(_._2).flatten,
+            controllers.map(_._3).max,
+            knobs,
+            groups,
+            controllers.map(c => c._1 -> c._4).toMap)
   }
 
 }
