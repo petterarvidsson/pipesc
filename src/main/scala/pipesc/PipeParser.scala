@@ -8,7 +8,7 @@ case class Positioned[T](value: T) extends Positional
 
 case class NSIdentifier(namespace: Seq[String], identifier: String) extends Positional {
   def name =
-    if (namespace == Seq("predef")) {
+    if (namespace == Predef.NS) {
       identifier
     } else {
       namespace.mkString(".") + "." + identifier
@@ -32,6 +32,17 @@ object PipeStatement {
       Set.empty[Value]
     case IfStatement(c, t, e) =>
       values(c) ++ values(t) ++ values(e)
+  }
+
+  def functionApplications(statement: PipeStatement): Set[FunctionApplication] = statement match {
+    case v: Value =>
+      Set.empty[FunctionApplication]
+    case f @ FunctionApplication(_, arguments) =>
+      Set(f) ++ arguments.flatMap(functionApplications).toSet
+    case _: Constant =>
+      Set.empty[FunctionApplication]
+    case IfStatement(c, t, e) =>
+      functionApplications(c) ++ functionApplications(t) ++ functionApplications(e)
   }
 }
 
@@ -293,7 +304,21 @@ object PipeParser extends Parsers {
         s"No such knob ${argument} defined for midi controller ${controller.controller}"
       }
 
-      val undefined = undefinedGroups ++ undefinedKnobs
+      val undefinedFunctionApplicationsInMidiControllers = for {
+        controller <- controllers
+        fn <- PipeStatement.functionApplications(controller.statement) if isDefined(fn, functions)
+      } yield {
+        s"No such function ${fn.identifier.name} in midi controller ${controller.controller}"
+      }
+
+      val undefinedFunctionApplicationsInFunctionDefinitions = for {
+        functionDefinition <- functions.values
+        fn <- PipeStatement.functionApplications(functionDefinition.statement) if isDefined(fn, functions)
+      } yield {
+        s"No such function ${fn.identifier.name} in function ${functionDefinition.identifier.name}"
+      }
+
+      val undefined = undefinedGroups ++ undefinedKnobs ++ undefinedFunctionApplicationsInMidiControllers ++ undefinedFunctionApplicationsInFunctionDefinitions
 
       if (undefined.isEmpty) {
         success(PipeProgram(controllers, knobs, groups, functions))
@@ -301,6 +326,9 @@ object PipeParser extends Parsers {
         err(undefined.mkString("\n"))
       }
     }
+
+  def isDefined(fn: FunctionApplication, functions: Map[NSIdentifier, FunctionDefinition]): Boolean =
+    !Instruction.i2o.contains(fn.identifier) && !functions.contains(fn.identifier)
 }
 
 class PipeTokenReader(tokens: Seq[PipeToken]) extends Reader[PipeToken] {
