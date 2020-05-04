@@ -20,6 +20,9 @@ case class PipeProgram(controllers: Seq[MidiControllerDefinition],
                        groups: Map[String, GroupDefinition],
                        functions: Map[NSIdentifier, FunctionDefinition])
 
+sealed trait Type
+case class IntegerType(intervals: Seq[MinMax]) extends Type
+
 sealed trait PipeStatement extends Positional
 
 object PipeStatement {
@@ -83,7 +86,7 @@ object NativePipeStatement {
         prettyPrint(arg2, indentation + 2)
         printIndented(s") ${minMax(s)} ${pos(s)}", indentation)
       case c: Constant =>
-        printIndented(s"${c.value.value} ${minMax(c)} ${pos(c)}", indentation)
+        printIndented(s"${c.value} ${minMax(c)} ${pos(c)}", indentation)
     }
   }
 
@@ -95,8 +98,8 @@ case class IfStatement(cond: PipeStatement, `then`: PipeStatement, `else`: PipeS
 
 case class Value(identifier: String) extends PipeStatement
 
-case class Constant(value: IntNum) extends PipeStatement with NativePipeStatement {
-  def minMax = MinMax(value.value, value.value)
+case class Constant(value: Int) extends PipeStatement with NativePipeStatement {
+  def minMax = MinMax(value, value)
 }
 
 case class NativeFunctionApplication(identifier: NSIdentifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
@@ -140,7 +143,7 @@ object PipeParser extends Parsers {
 
   def identifier = positioned(accept("identifier", { case id: Identifier => id }))
 
-  def constant = positioned(accept("intnum", { case i: IntNum => Constant(i) }))
+  def intnum = positioned(accept("intnum", { case i: IntNum => i }))
 
   def text = positioned(accept("text", { case t: Text => t }))
 
@@ -154,9 +157,17 @@ object PipeParser extends Parsers {
 
   def close = positioned(accept("close", { case c: Close => c }))
 
+  def squareopen = positioned(accept("squareopen", { case o: SquareOpen => o }))
+
+  def squareclose = positioned(accept("squareclose", { case c: SquareClose => c }))
+
   def comma = positioned(accept("comma", { case c: Comma => c }))
 
   def equals = positioned(accept("equals", { case e: Equals => e }))
+
+  def tilde = positioned(accept("tilde", { case t: Tilde => t }))
+
+  def minus = positioned(accept("minus", { case m: Minus => m }))
 
   def knob = positioned(accept("knob", { case k: Knob => k }))
 
@@ -166,6 +177,13 @@ object PipeParser extends Parsers {
 
   def arglist(namespaceSeq: Seq[String]): Parser[Positioned[Seq[PipeStatement]]] =
     positioned(rep1sep(statement(namespaceSeq), comma) ^^ (Positioned(_)))
+
+  def constant = positioned(
+    minus.? ~ intnum ^^ {
+      case Some(_) ~ i => Constant(i.value * -1)
+      case None ~ i    => Constant(i.value)
+    }
+  )
 
   def namespacePart =
     positioned(identifier ~ Dot() ^^ {
@@ -217,27 +235,14 @@ object PipeParser extends Parsers {
     positioned(
       knob ~ identifier ~ open ~ identifier ~ comma ~ constant ~ comma ~ constant ~ comma ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
         case _ ~ i ~ _ ~ g ~ _ ~ row ~ _ ~ column ~ _ ~ description ~ _ ~ min ~ _ ~ max ~ _ ~ step ~ _ =>
-          KnobDefinition(i.name,
-                         g.name,
-                         row.value.value,
-                         column.value.value,
-                         description,
-                         min.value.value,
-                         max.value.value,
-                         step.value.value)
+          KnobDefinition(i.name, g.name, row.value, column.value, description, min.value, max.value, step.value)
       })
 
   def groupDef =
     positioned(
       group ~ identifier ~ open ~ text ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ comma ~ constant ~ close ^^ {
         case _ ~ i ~ _ ~ description ~ _ ~ fromRow ~ _ ~ fromColumn ~ _ ~ toRow ~ _ ~ toColumn ~ _ =>
-          Positioned(
-            GroupDefinition(i.name,
-                            description,
-                            fromRow.value.value,
-                            fromColumn.value.value,
-                            toRow.value.value,
-                            toColumn.value.value))
+          Positioned(GroupDefinition(i.name, description, fromRow.value, fromColumn.value, toRow.value, toColumn.value))
       })
 
   def midiControllerDef(namespaceSeq: Seq[String]) =
@@ -249,10 +254,10 @@ object PipeParser extends Parsers {
           val unidentified = for {
             v <- PipeStatement.values(statement) if !arguments.contains(v.identifier)
           } yield {
-            s"${v.identifier} is undefined in definition of midi controller ${controller.value.value}"
+            s"${v.identifier} is undefined in definition of midi controller ${controller.value}"
           }
           if (unidentified.isEmpty) {
-            success(MidiControllerDefinition(controller.value.value, arguments, statement))
+            success(MidiControllerDefinition(controller.value, arguments, statement))
           } else {
             err(unidentified.mkString("\n"))
           }

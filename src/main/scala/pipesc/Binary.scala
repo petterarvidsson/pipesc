@@ -40,7 +40,7 @@ object Binary {
           .putShort(address.toShort)
           .putShort(0)
           .putShort(out.toShort)
-      case NullaryInstruction(opcode, Constant(IntNum(value)), out) =>
+      case NullaryInstruction(opcode, Constant(value), out) =>
         buffer
           .putShort(opcode.toShort)
           .putInt(value)

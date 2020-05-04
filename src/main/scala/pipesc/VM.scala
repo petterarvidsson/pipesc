@@ -32,7 +32,7 @@ object VM {
           if (memory(arg2) != 0) memory.update(out, memory(arg1) / memory(arg2))
         case BinaryInstruction(MOD, arg1, arg2, out) => memory.update(out, memory(arg1) % memory(arg2))
         case UnaryInstruction(LOAD, address, out)    => memory.update(out, memory(address))
-        case NullaryInstruction(CNT, constant, out)  => memory.update(out, constant.value.value)
+        case NullaryInstruction(CNT, constant, out)  => memory.update(out, constant.value)
       }
     }
 

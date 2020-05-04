@@ -16,9 +16,12 @@ case class SquareClose() extends PipeToken
 case class NewLine() extends PipeToken
 case class Comma() extends PipeToken
 case class Dot() extends PipeToken
+case class Minus() extends PipeToken
+case class Tilde() extends PipeToken
 case class Equals() extends PipeToken
 case class Def() extends PipeToken
 case class If() extends PipeToken
+case class IntToken() extends PipeToken
 case class Knob() extends PipeToken
 case class Group() extends PipeToken
 case class MidiController() extends PipeToken
@@ -33,6 +36,10 @@ object PipeLexer extends RegexParsers {
   def kif =
     positioned("if" ^^ { _ =>
       If()
+    })
+  def int =
+    positioned("int" ^^ { _ =>
+      IntToken()
     })
   def knob =
     positioned("knob" ^^ { _ =>
@@ -56,12 +63,20 @@ object PipeLexer extends RegexParsers {
       Identifier(s.toString)
     })
   def intnum =
-    positioned("""-?[0-9]+""".r ^^ { s =>
+    positioned("""[0-9]+""".r ^^ { s =>
       IntNum(s.toInt)
+    })
+  def minus =
+    positioned("-" ^^ { _ =>
+      Minus()
     })
   def dot =
     positioned("." ^^ { _ =>
       Dot()
+    })
+  def tilde =
+    positioned("~" ^^ { _ =>
+      Tilde()
     })
   def open =
     positioned("(" ^^ { _ =>
@@ -70,6 +85,14 @@ object PipeLexer extends RegexParsers {
   def close =
     positioned(")" ^^ { _ =>
       Close()
+    })
+  def squareopen =
+    positioned("[" ^^ { _ =>
+      SquareOpen()
+    })
+  def squareclose =
+    positioned("]" ^^ { _ =>
+      SquareClose()
     })
   def comma =
     positioned("," ^^ { _ =>
@@ -85,7 +108,7 @@ object PipeLexer extends RegexParsers {
     })
   def tokens: Parser[List[PipeToken]] = {
     phrase(rep1(
-      intnum | kdef | kif | knob | group | midicontroller | text | identifier | dot | open | close | comma | equals | newline)) ^^ {
+      intnum | kdef | kif | knob | group | midicontroller | int | text | identifier | dot | open | close | squareopen | squareclose | comma | equals | tilde | minus | newline)) ^^ {
       r =>
         r
     }
