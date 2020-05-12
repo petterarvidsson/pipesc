@@ -2,6 +2,8 @@ package pipesc
 
 import scala.math.max
 
+case class NativeFunction(signature: Seq[Type], minMax: (MinMax, MinMax) => MinMax)
+
 sealed trait Instruction
 
 case class BinaryInstruction(opcode: Int, arg1: Int, arg2: Int, out: Int) extends Instruction
@@ -9,6 +11,9 @@ case class UnaryInstruction(opcode: Int, address: Int, out: Int) extends Instruc
 case class NullaryInstruction(opcode: Int, constant: Constant, out: Int) extends Instruction
 
 object Instruction {
+  val IntMax = 2147483647
+  val IntMin = -2147483646
+
   // ALU
   val ADD = 0x00
   val SUB = 0x01
@@ -47,13 +52,36 @@ object Instruction {
   def modMinMax(m1: MinMax, m2: MinMax): MinMax =
     m2
 
-  val i2minMax = Map[NSIdentifier, (MinMax, MinMax) => MinMax](
-    NSIdentifier(Predef.NS, Predef.Add) -> addMinMax,
-    NSIdentifier(Predef.NS, Predef.Sub) -> subMinMax,
-    NSIdentifier(Predef.NS, Predef.Mul) -> mulMinMax,
-    NSIdentifier(Predef.NS, Predef.Div) -> divMinMax,
-    NSIdentifier(Predef.NS, Predef.Mod) -> modMinMax
+  val NonZero = IntegerType(Seq(MinMax(IntMin, -1), MinMax(1, IntMax)))
+  val FullIntRange = IntegerType(Seq(MinMax(IntMin, IntMax)))
+
+  val nativeFunctions = Map[NSIdentifier, NativeFunction](
+    NSIdentifier(Predef.NS, Predef.Add) -> NativeFunction(Seq(FullIntRange, FullIntRange), addMinMax),
+    NSIdentifier(Predef.NS, Predef.Sub) -> NativeFunction(Seq(FullIntRange, FullIntRange), subMinMax),
+    NSIdentifier(Predef.NS, Predef.Mul) -> NativeFunction(Seq(FullIntRange, FullIntRange), mulMinMax),
+    NSIdentifier(Predef.NS, Predef.Div) -> NativeFunction(Seq(FullIntRange, NonZero), divMinMax),
+    NSIdentifier(Predef.NS, Predef.Mod) -> NativeFunction(Seq(FullIntRange, NonZero), modMinMax)
   )
+
+  def findNativeFunction(identifier: NSIdentifier, args: Seq[MinMax]): (Option[NativeFunction], Seq[NativeFunction]) = {
+    nativeFunctions.get(identifier) match {
+      case Some(nf) =>
+        if(args.size == nf.signature.size) {
+          if(args.zip(nf.signature).foldLeft(true){ (acc, e) =>
+            acc & Plumber.withinBounds(e._1, e._2.intervals)
+          }) {
+            (Some(nf), Seq(nf))
+          } else {
+            (None, Seq(nf))
+          }
+        } else {
+          (None, Seq(nf))
+        }
+
+      case None =>
+        (None, Seq.empty)
+    }
+  }
 }
 
 case class Fragment(instructions: Seq[Instruction], maxOffset: Int) {
@@ -64,6 +92,7 @@ case class Fragment(instructions: Seq[Instruction], maxOffset: Int) {
 object Fragment {
   def apply(instruction: Instruction, offset: Int): Fragment =
     Fragment(Seq(instruction), offset)
+  val empty = apply(Seq.empty, 0)
 }
 
 case class Program(instructions: Seq[Instruction],
@@ -134,6 +163,9 @@ object Assembler {
         Fragment(NullaryInstruction(CNT, constant, offset), offset)
       case KnobDefinition(identifier, _, _, _, _, _, _, _) =>
         Fragment(UnaryInstruction(LOAD, values(identifier), offset), offset)
+      case _: Noop =>
+        Fragment.empty
+
     }
 
   def assemble(unrolledProgram: UnrolledPipeProgram): Program = {

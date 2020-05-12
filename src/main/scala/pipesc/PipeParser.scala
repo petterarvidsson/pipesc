@@ -20,8 +20,24 @@ case class PipeProgram(controllers: Seq[MidiControllerDefinition],
                        groups: Map[String, GroupDefinition],
                        functions: Map[NSIdentifier, FunctionDefinition])
 
-sealed trait Type
-case class IntegerType(intervals: Seq[MinMax]) extends Type
+sealed trait Type extends Positional {
+  def intervals: Seq[MinMax]
+  def prettyPrint: String
+}
+
+object Type {
+  def signatureString(signature: Seq[Type]): String = {
+    val s = signature.map(_.prettyPrint).mkString(", ")
+    s"($s)"
+  }
+}
+
+case class IntegerType(override val intervals: Seq[MinMax]) extends Type {
+  def prettyPrint = {
+    val intervalsString = intervals.map(_.prettyPrint).mkString(", ")
+    s"int[$intervalsString]"
+  }
+}
 
 sealed trait PipeStatement extends Positional
 
@@ -52,6 +68,11 @@ object PipeStatement {
 case class MinMax(min: Int, max: Int) {
   def withinBounds(m: MinMax): Boolean =
     m.max <= max && m.min >= min
+  def prettyPrint = if(min == max) {
+    s"$min"
+  } else {
+    s"$min..$max"
+  }
 }
 
 sealed trait NativePipeStatement extends Positional {
@@ -87,9 +108,12 @@ object NativePipeStatement {
         printIndented(s") ${minMax(s)} ${pos(s)}", indentation)
       case c: Constant =>
         printIndented(s"${c.value} ${minMax(c)} ${pos(c)}", indentation)
+      case _: Noop =>
+        printIndented("noop", indentation)
     }
   }
 
+  val NoopStatement = new Noop()
 }
 
 case class FunctionApplication(identifier: NSIdentifier, arguments: Seq[PipeStatement]) extends PipeStatement
@@ -104,7 +128,7 @@ case class Constant(value: Int) extends PipeStatement with NativePipeStatement {
 
 case class NativeFunctionApplication(identifier: NSIdentifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
     extends NativePipeStatement {
-  def minMax = Instruction.i2minMax(identifier)(arg1.minMax, arg2.minMax)
+  def minMax = Instruction.nativeFunctions(identifier).minMax(arg1.minMax, arg2.minMax)
 }
 
 case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatement, `else`: NativePipeStatement)
@@ -114,7 +138,7 @@ case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatem
   }
 }
 
-case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], statement: PipeStatement)
+case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], statement: PipeStatement, signature: Seq[Type])
     extends Positional
 
 case class KnobDefinition(identifier: String,
@@ -128,6 +152,11 @@ case class KnobDefinition(identifier: String,
     extends NativePipeStatement {
   def minMax = MinMax(min, max)
 }
+
+class Noop extends NativePipeStatement {
+  override def minMax = MinMax(0,0)
+}
+
 case class MidiControllerDefinition(controller: Int, arguments: Seq[String], statement: PipeStatement)
     extends Positional
 
@@ -143,7 +172,7 @@ object PipeParser extends Parsers {
 
   def identifier = positioned(accept("identifier", { case id: Identifier => id }))
 
-  def intnum = positioned(accept("intnum", { case i: IntNum => i }))
+  def intnum = positioned(accept("integer", { case i: IntNum => i }))
 
   def text = positioned(accept("text", { case t: Text => t }))
 
@@ -153,25 +182,29 @@ object PipeParser extends Parsers {
 
   def `if` = positioned(accept("if", { case i: If => i }))
 
-  def open = positioned(accept("open", { case o: Open => o }))
+  def int = positioned(accept("int", { case i: IntToken => i }))
 
-  def close = positioned(accept("close", { case c: Close => c }))
+  def open = positioned(accept("(", { case o: Open => o }))
 
-  def squareopen = positioned(accept("squareopen", { case o: SquareOpen => o }))
+  def close = positioned(accept(")", { case c: Close => c }))
 
-  def squareclose = positioned(accept("squareclose", { case c: SquareClose => c }))
+  def squareopen = positioned(accept("[", { case o: SquareOpen => o }))
 
-  def comma = positioned(accept("comma", { case c: Comma => c }))
+  def squareclose = positioned(accept("]", { case c: SquareClose => c }))
 
-  def equals = positioned(accept("equals", { case e: Equals => e }))
+  def comma = positioned(accept(",", { case c: Comma => c }))
 
-  def tilde = positioned(accept("tilde", { case t: Tilde => t }))
+  def equals = positioned(accept("=", { case e: Equals => e }))
 
-  def minus = positioned(accept("minus", { case m: Minus => m }))
+  def tilde = positioned(accept("~", { case t: Tilde => t }))
+
+  def minus = positioned(accept("-", { case m: Minus => m }))
 
   def knob = positioned(accept("knob", { case k: Knob => k }))
 
   def group = positioned(accept("group", { case g: Group => g }))
+
+  def dot = positioned(accept(".", { case d: Dot => d }))
 
   def midicontroller = positioned(accept("midicontroller", { case m: MidiController => m }))
 
@@ -186,7 +219,7 @@ object PipeParser extends Parsers {
   )
 
   def namespacePart =
-    positioned(identifier ~ Dot() ^^ {
+    positioned(identifier ~ dot ^^ {
       case i ~ _ => i
     })
 
@@ -206,17 +239,40 @@ object PipeParser extends Parsers {
         }
     })
 
+  def intrange =
+    intnum ~ dot ~ dot ~ intnum ^^ {
+      case min ~ _ ~ _ ~ max => MinMax(min.value, max.value)
+    }
+
+  def intrangelist =
+    squareopen ~ repsep(intrange, comma) ~ squareclose ^^ {
+      case _ ~ ranges ~ _ => ranges
+    }
+
+  def inttype: Parser[Type] = positioned(
+    int ~ intrangelist.? ^^ {
+      case _ ~ Some(ranges) => IntegerType(ranges)
+      case _ ~ None => Instruction.FullIntRange
+    }
+  )
+
   def value = positioned(accept("identifier", { case i: Identifier => Value(i.name) }))
 
-  def fndefarglist: Parser[Positioned[Seq[Identifier]]] = positioned(repsep(identifier, comma) ^^ (Positioned(_)))
+  def fndefarg =
+    inttype ~ identifier ^^ {
+      case t ~ i => (i, t)
+    }
+
+  def fndefarglist: Parser[(Seq[Identifier], Seq[Type])] = repsep(fndefarg, comma) ^^ { s: Seq[(Identifier, Type)] =>
+    s.unzip
+  }
 
   def fnDef(namespaceSeq: Seq[String]) =
     positioned {
       `def` ~ namespaceIdentifier(namespaceSeq) ~ open ~ fndefarglist ~ close ~ equals ~ newline.* ~ statement(
         namespaceSeq) flatMap {
-        case _ ~ i ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
-          val arguments = args.value.map(_.name)
-
+        case _ ~ i ~ _ ~ ((args, types)) ~ _ ~ _ ~ _ ~ statement =>
+          val arguments = args.map(_.name)
           val unidentified = for {
             v <- PipeStatement.values(statement) if !arguments.contains(v.identifier)
           } yield {
@@ -224,7 +280,7 @@ object PipeParser extends Parsers {
           }
 
           if (unidentified.isEmpty) {
-            success(FunctionDefinition(i, arguments, statement))
+            success(FunctionDefinition(i, arguments, statement, types))
           } else {
             err(unidentified.mkString("\n"))
           }
@@ -245,9 +301,11 @@ object PipeParser extends Parsers {
           Positioned(GroupDefinition(i.name, description, fromRow.value, fromColumn.value, toRow.value, toColumn.value))
       })
 
+  def mididefarglist: Parser[Positioned[Seq[Identifier]]] = positioned(repsep(identifier, comma) ^^ (Positioned(_)))
+
   def midiControllerDef(namespaceSeq: Seq[String]) =
     positioned {
-      midicontroller ~ open ~ constant ~ close ~ open ~ fndefarglist ~ close ~ equals ~ newline.* ~ statement(
+      midicontroller ~ open ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(
         namespaceSeq) flatMap {
         case _ ~ _ ~ controller ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
           val arguments = args.value.map(_.name)
@@ -333,7 +391,7 @@ object PipeParser extends Parsers {
     }
 
   def isDefined(fn: FunctionApplication, functions: Map[NSIdentifier, FunctionDefinition]): Boolean =
-    !Instruction.i2o.contains(fn.identifier) && !functions.contains(fn.identifier)
+    !Instruction.nativeFunctions.contains(fn.identifier) && !functions.contains(fn.identifier)
 }
 
 class PipeTokenReader(tokens: Seq[PipeToken]) extends Reader[PipeToken] {

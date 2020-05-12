@@ -2,30 +2,34 @@ package pipesc
 
 import scala.io.Source
 import java.io.FileOutputStream
+import java.io.File
 import scala.util.parsing.combinator._
 
 object Main {
   def main(args: Array[String]) {
-    val plumber = new Plumber()
     if (args.size != 1) {
       println("Usage: pipesc <source.pipe>")
       System.exit(1)
     }
     val code = Source.fromFile(args(0)).mkString
-    println(code)
+    val path = new File(args(0)).getCanonicalFile.toPath
+
+    val plumber = new Plumber(path)
     PipeLexer.parse(PipeLexer.tokens, code) match {
-      case PipeLexer.NoSuccess(msg, next) => println(s"${next.pos.line}:${next.pos.column} $msg")
+      case PipeLexer.NoSuccess(msg, next) => println(s"$path:${next.pos.line}:${next.pos.column}: $msg\n${next.pos.longString}")
       case PipeLexer.Success(tokens, next) =>
-        println(s"Tokens: $tokens, $next")
         val moduleNs = Seq("demo")
         PipeParser.file(moduleNs)(new PipeTokenReader(tokens)) match {
-          case PipeParser.NoSuccess(msg, next) => println(s"${next.pos.line}:${next.pos.column} $msg")
+          case PipeParser.NoSuccess(msg, next) => println(s"$path:${next.pos.line}:${next.pos.column}: $msg\n${next.pos.longString}")
           case PipeParser.Success(ast, next) =>
-            println(s"AST: $ast, $next")
-            val unrolledProgram = plumber.unroll(ast)
-            UnrolledPipeProgram.prettyPrint(unrolledProgram)
+            val (unrolledProgram, errors) = plumber.unroll(ast)
+            if(!errors.isEmpty) {
+              for(error <- errors) {
+                println(error.prettyPrint)
+              }
+              System.exit(-1)
+            }
             val program = Assembler.assemble(unrolledProgram)
-            Program.prettyPrint(program)
             println(
               VM.run(program,
                      "Cut Off" -> 2,
