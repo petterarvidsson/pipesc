@@ -16,15 +16,17 @@ object Main {
 
     val plumber = new Plumber(path)
     PipeLexer.parse(PipeLexer.tokens, code) match {
-      case PipeLexer.NoSuccess(msg, next) => println(s"$path:${next.pos.line}:${next.pos.column}: $msg\n${next.pos.longString}")
+      case PipeLexer.NoSuccess(msg, next) =>
+        println(s"$path:${next.pos.line}:${next.pos.column}: $msg\n${next.pos.longString}")
       case PipeLexer.Success(tokens, next) =>
         val moduleNs = Seq("demo")
         PipeParser.file(moduleNs)(new PipeTokenReader(tokens)) match {
-          case PipeParser.NoSuccess(msg, next) => println(s"$path:${next.pos.line}:${next.pos.column}: $msg\n${next.pos.longString}")
+          case PipeParser.NoSuccess(msg, next) =>
+            println(s"$path:${next.pos.line}:${next.pos.column}: $msg\n${next.pos.longString}")
           case PipeParser.Success(ast, next) =>
             val (unrolledProgram, errors) = plumber.unroll(ast)
-            if(!errors.isEmpty) {
-              for(error <- errors) {
+            if (!errors.isEmpty) {
+              for (error <- errors) {
                 println(error.prettyPrint)
               }
               System.exit(-1)

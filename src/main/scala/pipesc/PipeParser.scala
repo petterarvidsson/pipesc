@@ -18,7 +18,7 @@ case class NSIdentifier(namespace: Seq[String], identifier: String) extends Posi
 case class PipeProgram(controllers: Seq[MidiControllerDefinition],
                        knobs: Map[String, KnobDefinition],
                        groups: Map[String, GroupDefinition],
-                       functions: Map[NSIdentifier, FunctionDefinition])
+                       functions: Map[NSIdentifier, Seq[Function]])
 
 sealed trait Type extends Positional {
   def intervals: Seq[MinMax]
@@ -68,11 +68,19 @@ object PipeStatement {
 case class MinMax(min: Int, max: Int) {
   def withinBounds(m: MinMax): Boolean =
     m.max <= max && m.min >= min
-  def prettyPrint = if(min == max) {
-    s"$min"
-  } else {
-    s"$min..$max"
-  }
+  def prettyPrint =
+    if (min == max) {
+      s"$min"
+    } else {
+      s"$min..$max"
+    }
+}
+
+object MinMax {
+  def withinBounds(minMax: MinMax, bounds: Seq[MinMax]): Boolean =
+    bounds.foldLeft(false) { (acc, bound) =>
+      acc | bound.withinBounds(minMax)
+    }
 }
 
 sealed trait NativePipeStatement extends Positional {
@@ -95,7 +103,7 @@ object NativePipeStatement {
     statement match {
       case s @ KnobDefinition(identifier, _, _, _, _, _, _, _) =>
         printIndented(s"$identifier ${minMax(s)} ${pos(s)}", indentation)
-      case s @ NativeFunctionApplication(identifier, arg1, arg2) =>
+      case s @ NativeFunctionApplication(identifier, arg1, arg2, _) =>
         printIndented(s"${identifier.name}(", indentation)
         prettyPrint(arg1, indentation + 2)
         prettyPrint(arg2, indentation + 2)
@@ -126,9 +134,12 @@ case class Constant(value: Int) extends PipeStatement with NativePipeStatement {
   def minMax = MinMax(value, value)
 }
 
-case class NativeFunctionApplication(identifier: NSIdentifier, arg1: NativePipeStatement, arg2: NativePipeStatement)
+case class NativeFunctionApplication(identifier: NSIdentifier,
+                                     arg1: NativePipeStatement,
+                                     arg2: NativePipeStatement,
+                                     nf: NativeFunction)
     extends NativePipeStatement {
-  def minMax = Instruction.nativeFunctions(identifier).minMax(arg1.minMax, arg2.minMax)
+  def minMax = nf.minMax(arg1.minMax, arg2.minMax)
 }
 
 case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatement, `else`: NativePipeStatement)
@@ -138,8 +149,37 @@ case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatem
   }
 }
 
-case class FunctionDefinition(identifier: NSIdentifier, arguments: Seq[String], statement: PipeStatement, signature: Seq[Type])
-    extends Positional
+sealed trait Function {
+  def signature: Seq[Type]
+}
+
+object Function {
+  def find(identifier: NSIdentifier,
+           args: Seq[MinMax],
+           functionsMap: Map[NSIdentifier, Seq[Function]]): Either[Seq[Function], Function] =
+    (functionsMap.get(identifier) map { functions =>
+      ((functions.filter { function =>
+        args.size == function.signature.size && args.zip(function.signature).foldLeft(true) { (acc, e) =>
+          acc & MinMax.withinBounds(e._1, e._2.intervals)
+        }
+      }).headOption match {
+        case Some(function) => Right(function)
+        case None           => Left(functions)
+      })
+    }) match {
+      case Some(either) => either
+      case None         => Left(Seq.empty)
+    }
+}
+
+case class FunctionDefinition(identifier: NSIdentifier,
+                              arguments: Seq[String],
+                              statement: PipeStatement,
+                              signature: Seq[Type])
+    extends Function
+    with Positional
+
+case class NativeFunction(signature: Seq[Type], minMax: (MinMax, MinMax) => MinMax) extends Function
 
 case class KnobDefinition(identifier: String,
                           groupIdentifier: String,
@@ -154,7 +194,7 @@ case class KnobDefinition(identifier: String,
 }
 
 class Noop extends NativePipeStatement {
-  override def minMax = MinMax(0,0)
+  override def minMax = MinMax(0, 0)
 }
 
 case class MidiControllerDefinition(controller: Int, arguments: Seq[String], statement: PipeStatement)
@@ -252,7 +292,7 @@ object PipeParser extends Parsers {
   def inttype: Parser[Type] = positioned(
     int ~ intrangelist.? ^^ {
       case _ ~ Some(ranges) => IntegerType(ranges)
-      case _ ~ None => Instruction.FullIntRange
+      case _ ~ None         => Instruction.FullIntRange
     }
   )
 
@@ -367,24 +407,10 @@ object PipeParser extends Parsers {
         s"No such knob ${argument} defined for midi controller ${controller.controller}"
       }
 
-      val undefinedFunctionApplicationsInMidiControllers = for {
-        controller <- controllers
-        fn <- PipeStatement.functionApplications(controller.statement) if isDefined(fn, functions)
-      } yield {
-        s"No such function ${fn.identifier.name} in midi controller ${controller.controller}"
-      }
-
-      val undefinedFunctionApplicationsInFunctionDefinitions = for {
-        functionDefinition <- functions.values
-        fn <- PipeStatement.functionApplications(functionDefinition.statement) if isDefined(fn, functions)
-      } yield {
-        s"No such function ${fn.identifier.name} in function ${functionDefinition.identifier.name}"
-      }
-
-      val undefined = undefinedGroups ++ undefinedKnobs ++ undefinedFunctionApplicationsInMidiControllers ++ undefinedFunctionApplicationsInFunctionDefinitions
+      val undefined = undefinedGroups ++ undefinedKnobs
 
       if (undefined.isEmpty) {
-        success(PipeProgram(controllers, knobs, groups, functions))
+        success(PipeProgram(controllers, knobs, groups, functions.map { case (k, v) => k -> Seq(v) }))
       } else {
         err(undefined.mkString("\n"))
       }

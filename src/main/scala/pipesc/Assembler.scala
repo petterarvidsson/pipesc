@@ -2,8 +2,6 @@ package pipesc
 
 import scala.math.max
 
-case class NativeFunction(signature: Seq[Type], minMax: (MinMax, MinMax) => MinMax)
-
 sealed trait Instruction
 
 case class BinaryInstruction(opcode: Int, arg1: Int, arg2: Int, out: Int) extends Instruction
@@ -55,33 +53,14 @@ object Instruction {
   val NonZero = IntegerType(Seq(MinMax(IntMin, -1), MinMax(1, IntMax)))
   val FullIntRange = IntegerType(Seq(MinMax(IntMin, IntMax)))
 
-  val nativeFunctions = Map[NSIdentifier, NativeFunction](
-    NSIdentifier(Predef.NS, Predef.Add) -> NativeFunction(Seq(FullIntRange, FullIntRange), addMinMax),
-    NSIdentifier(Predef.NS, Predef.Sub) -> NativeFunction(Seq(FullIntRange, FullIntRange), subMinMax),
-    NSIdentifier(Predef.NS, Predef.Mul) -> NativeFunction(Seq(FullIntRange, FullIntRange), mulMinMax),
-    NSIdentifier(Predef.NS, Predef.Div) -> NativeFunction(Seq(FullIntRange, NonZero), divMinMax),
-    NSIdentifier(Predef.NS, Predef.Mod) -> NativeFunction(Seq(FullIntRange, NonZero), modMinMax)
+  val nativeFunctions = Map[NSIdentifier, Seq[Function]](
+    NSIdentifier(Predef.NS, Predef.Add) -> Seq(NativeFunction(Seq(FullIntRange, FullIntRange), addMinMax)),
+    NSIdentifier(Predef.NS, Predef.Sub) -> Seq(NativeFunction(Seq(FullIntRange, FullIntRange), subMinMax)),
+    NSIdentifier(Predef.NS, Predef.Mul) -> Seq(NativeFunction(Seq(FullIntRange, FullIntRange), mulMinMax)),
+    NSIdentifier(Predef.NS, Predef.Div) -> Seq(NativeFunction(Seq(FullIntRange, NonZero), divMinMax)),
+    NSIdentifier(Predef.NS, Predef.Mod) -> Seq(NativeFunction(Seq(FullIntRange, NonZero), modMinMax))
   )
 
-  def findNativeFunction(identifier: NSIdentifier, args: Seq[MinMax]): (Option[NativeFunction], Seq[NativeFunction]) = {
-    nativeFunctions.get(identifier) match {
-      case Some(nf) =>
-        if(args.size == nf.signature.size) {
-          if(args.zip(nf.signature).foldLeft(true){ (acc, e) =>
-            acc & Plumber.withinBounds(e._1, e._2.intervals)
-          }) {
-            (Some(nf), Seq(nf))
-          } else {
-            (None, Seq(nf))
-          }
-        } else {
-          (None, Seq(nf))
-        }
-
-      case None =>
-        (None, Seq.empty)
-    }
-  }
 }
 
 case class Fragment(instructions: Seq[Instruction], maxOffset: Int) {
@@ -139,7 +118,7 @@ object Assembler {
 
   def assemble(statement: NativePipeStatement, offset: Int, values: Map[String, Int]): Fragment =
     statement match {
-      case NativeFunctionApplication(identifier, arg1, arg2) =>
+      case NativeFunctionApplication(identifier, arg1, arg2, _) =>
         val outOffset = offset
         val arg1Offset = offset + 1
         val arg1Fragment = assemble(arg1, arg1Offset, values)
