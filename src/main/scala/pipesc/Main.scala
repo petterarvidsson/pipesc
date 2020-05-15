@@ -31,7 +31,9 @@ object Main {
               }
               System.exit(-1)
             }
+            UnrolledPipeProgram.prettyPrint(unrolledProgram)
             val program = Assembler.assemble(unrolledProgram)
+            Program.prettyPrint(program)
             println(
               VM.run(program,
                      "Cut Off" -> 2,

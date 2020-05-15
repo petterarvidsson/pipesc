@@ -18,7 +18,7 @@ case class NSIdentifier(namespace: Seq[String], identifier: String) extends Posi
 case class PipeProgram(controllers: Seq[MidiControllerDefinition],
                        knobs: Map[String, KnobDefinition],
                        groups: Map[String, GroupDefinition],
-                       functions: Map[NSIdentifier, Seq[Function]])
+                       functions: Map[NSIdentifier, Function])
 
 sealed trait Type extends Positional {
   def intervals: Seq[MinMax]
@@ -66,6 +66,8 @@ object PipeStatement {
 }
 
 case class MinMax(min: Int, max: Int) {
+  def offset = 0 - min
+  def magnitude = max - min
   def withinBounds(m: MinMax): Boolean =
     m.max <= max && m.min >= min
   def prettyPrint =
@@ -151,25 +153,11 @@ case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatem
 
 sealed trait Function {
   def signature: Seq[Type]
-}
-
-object Function {
-  def find(identifier: NSIdentifier,
-           args: Seq[MinMax],
-           functionsMap: Map[NSIdentifier, Seq[Function]]): Either[Seq[Function], Function] =
-    (functionsMap.get(identifier) map { functions =>
-      ((functions.filter { function =>
-        args.size == function.signature.size && args.zip(function.signature).foldLeft(true) { (acc, e) =>
-          acc & MinMax.withinBounds(e._1, e._2.intervals)
-        }
-      }).headOption match {
-        case Some(function) => Right(function)
-        case None           => Left(functions)
-      })
-    }) match {
-      case Some(either) => either
-      case None         => Left(Seq.empty)
+  def canBeAppliedTo(args: Seq[MinMax]): Boolean =
+    args.size == signature.size && args.zip(signature).foldLeft(true) { (acc, e) =>
+      acc & MinMax.withinBounds(e._1, e._2.intervals)
     }
+
 }
 
 case class FunctionDefinition(identifier: NSIdentifier,
@@ -180,6 +168,10 @@ case class FunctionDefinition(identifier: NSIdentifier,
     with Positional
 
 case class NativeFunction(signature: Seq[Type], minMax: (MinMax, MinMax) => MinMax) extends Function
+
+case object Scale extends Function {
+  override val signature: Seq[Type] = Seq(IntegerType(Seq(MinMax(Instruction.IntMin, Instruction.IntMax))))
+}
 
 case class KnobDefinition(identifier: String,
                           groupIdentifier: String,
@@ -410,7 +402,7 @@ object PipeParser extends Parsers {
       val undefined = undefinedGroups ++ undefinedKnobs
 
       if (undefined.isEmpty) {
-        success(PipeProgram(controllers, knobs, groups, functions.map { case (k, v) => k -> Seq(v) }))
+        success(PipeProgram(controllers, knobs, groups, functions))
       } else {
         err(undefined.mkString("\n"))
       }

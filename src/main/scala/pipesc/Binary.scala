@@ -99,7 +99,7 @@ object Binary {
   }
   def binaryEncode(program: Program): ByteBuffer =
     binaryEncodeProgram(ByteBuffer
-                          .allocate(512)
+                          .allocate(1024)
                           .order(ByteOrder.BIG_ENDIAN),
                         program)
 

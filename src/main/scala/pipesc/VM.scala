@@ -124,10 +124,10 @@ object VM {
         case MUL  => memory.update(out, (memory(arg1) * memory(arg2)))
         case DIV  => if (memory(arg2) != 0) memory.update(out, (memory(arg1) / memory(arg2)))
         case LOAD => memory.update(out, memory(arg1))
-        case CNT  => memory.update(out, arg1)
+        case CNT  => memory.update(out, arg)
       }
     }
-    memory
+    println(memory.toSeq)
 
     for ((memoryOffset, controller) <- controllers) yield {
       controller -> memory(memoryOffset)

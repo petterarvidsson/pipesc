@@ -53,12 +53,12 @@ object Instruction {
   val NonZero = IntegerType(Seq(MinMax(IntMin, -1), MinMax(1, IntMax)))
   val FullIntRange = IntegerType(Seq(MinMax(IntMin, IntMax)))
 
-  val nativeFunctions = Map[NSIdentifier, Seq[Function]](
-    NSIdentifier(Predef.NS, Predef.Add) -> Seq(NativeFunction(Seq(FullIntRange, FullIntRange), addMinMax)),
-    NSIdentifier(Predef.NS, Predef.Sub) -> Seq(NativeFunction(Seq(FullIntRange, FullIntRange), subMinMax)),
-    NSIdentifier(Predef.NS, Predef.Mul) -> Seq(NativeFunction(Seq(FullIntRange, FullIntRange), mulMinMax)),
-    NSIdentifier(Predef.NS, Predef.Div) -> Seq(NativeFunction(Seq(FullIntRange, NonZero), divMinMax)),
-    NSIdentifier(Predef.NS, Predef.Mod) -> Seq(NativeFunction(Seq(FullIntRange, NonZero), modMinMax))
+  val nativeFunctions = Map[NSIdentifier, NativeFunction](
+    NSIdentifier(Predef.NS, Predef.Add) -> NativeFunction(Seq(FullIntRange, FullIntRange), addMinMax),
+    NSIdentifier(Predef.NS, Predef.Sub) -> NativeFunction(Seq(FullIntRange, FullIntRange), subMinMax),
+    NSIdentifier(Predef.NS, Predef.Mul) -> NativeFunction(Seq(FullIntRange, FullIntRange), mulMinMax),
+    NSIdentifier(Predef.NS, Predef.Div) -> NativeFunction(Seq(FullIntRange, NonZero), divMinMax),
+    NSIdentifier(Predef.NS, Predef.Mod) -> NativeFunction(Seq(FullIntRange, NonZero), modMinMax)
   )
 
 }
