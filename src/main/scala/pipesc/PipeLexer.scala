@@ -22,9 +22,9 @@ case class Equals() extends PipeToken
 case class Def() extends PipeToken
 case class If() extends PipeToken
 case class IntToken() extends PipeToken
-case class Knob() extends PipeToken
+case class Controller() extends PipeToken
 case class Group() extends PipeToken
-case class MidiController() extends PipeToken
+case class MidiCC() extends PipeToken
 case class QuotationMark() extends PipeToken
 
 object PipeLexer extends RegexParsers {
@@ -41,17 +41,17 @@ object PipeLexer extends RegexParsers {
     positioned("int" ^^ { _ =>
       IntToken()
     })
-  def knob =
-    positioned("knob" ^^ { _ =>
-      Knob()
+  def controller =
+    positioned("controller" ^^ { _ =>
+      Controller()
     })
   def group =
     positioned("group" ^^ { _ =>
       Group()
     })
-  def midicontroller =
-    positioned("midi_controller" ^^ { _ =>
-      MidiController()
+  def midicc =
+    positioned("midi_cc" ^^ { _ =>
+      MidiCC()
     })
   def text =
     positioned("""\"[a-zA-Z_0-9\s-]*\"""".r ^^ { s =>
@@ -108,7 +108,7 @@ object PipeLexer extends RegexParsers {
     })
   def tokens: Parser[List[PipeToken]] = {
     phrase(rep1(
-      intnum | kdef | kif | knob | group | midicontroller | int | text | identifier | dot | open | close | squareopen | squareclose | comma | equals | tilde | minus | newline)) ^^ {
+      intnum | kdef | kif | controller | group | midicc | int | text | identifier | dot | open | close | squareopen | squareclose | comma | equals | tilde | minus | newline)) ^^ {
       r =>
         r
     }

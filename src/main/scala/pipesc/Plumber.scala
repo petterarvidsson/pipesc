@@ -2,21 +2,21 @@ package pipesc
 
 import java.nio.file.Path
 
-case class UnrolledController(controller: Int, statement: NativePipeStatement, inputs: Set[KnobDefinition])
-case class UnrolledPipeProgram(controllers: Seq[UnrolledController],
-                               knobs: Map[String, KnobDefinition],
+case class UnrolledCC(cc: Int, statement: NativePipeStatement, inputs: Set[ControllerDefinition])
+case class UnrolledPipeProgram(ccs: Seq[UnrolledCC],
+                               controllers: Map[String, ControllerDefinition],
                                groups: Map[String, GroupDefinition])
 
 object UnrolledPipeProgram {
   def prettyPrint(program: UnrolledPipeProgram) {
-    println("Knobs:")
-    for (knob <- program.knobs) {
-      println(knob)
-    }
+    println("Controllers:")
     for (controller <- program.controllers) {
-      val inputs = controller.inputs.map(_.identifier).mkString(", ")
-      NativePipeStatement.printIndented(s"CC${controller.controller}($inputs) {", 0)
-      NativePipeStatement.prettyPrint(controller.statement, 1)
+      println(controller)
+    }
+    for (cc <- program.ccs) {
+      val inputs = cc.inputs.map(_.identifier).mkString(", ")
+      NativePipeStatement.printIndented(s"CC${cc.cc}($inputs) {", 0)
+      NativePipeStatement.prettyPrint(cc.statement, 1)
       NativePipeStatement.printIndented(s"}", 0)
     }
   }
@@ -125,40 +125,38 @@ class Plumber(val path: Path) {
     unroll(fn.statement, arguments, functions, expectedType)
   }
 
-  def unroll(controller: MidiControllerDefinition,
+  def unroll(cc: MidiCCDefinition,
              arguments: Map[String, (NativePipeStatement, Seq[CompilerError])],
              functions: Map[NSIdentifier, Function]): (NativePipeStatement, Seq[CompilerError]) = {
-    unroll(controller.statement, arguments, functions, Plumber.MidiType)
+    unroll(cc.statement, arguments, functions, Plumber.MidiType)
   }
 
   def unroll(program: PipeProgram): (UnrolledPipeProgram, Seq[CompilerError]) = {
-    val controllers = for (controller <- program.controllers) yield {
-      val arguments: Map[String, (KnobDefinition, Seq[CompilerError])] = controller.arguments.map { identifier =>
-        (identifier, (program.knobs(identifier), Seq.empty))
+    val ccs = for (cc <- program.ccs) yield {
+      val arguments: Map[String, (ControllerDefinition, Seq[CompilerError])] = cc.arguments.map { identifier =>
+        (identifier, (program.controllers(identifier), Seq.empty))
       } toMap
       val (statement, errors) = unroll(
-        controller,
+        cc,
         arguments,
         (program.functions ++ Instruction.nativeFunctions) + (NSIdentifier(Predef.NS, Predef.Scale) -> Scale))
       val minMax = statement.minMax
-      val controllerErrors = if (!Plumber.MidiBounds.withinBounds(statement.minMax)) {
+      val ccErrors = if (!Plumber.MidiBounds.withinBounds(statement.minMax)) {
         Seq(
-          CompilerError(
-            path,
-            controller.statement.pos,
-            s"${minMax.prettyPrint} is out of controller #${controller.controller} bounds [${Plumber.MidiBounds.prettyPrint}]"))
+          CompilerError(path,
+                        cc.statement.pos,
+                        s"${minMax.prettyPrint} is out of cc #${cc.cc} bounds [${Plumber.MidiBounds.prettyPrint}]"))
       } else {
         Seq.empty
       }
-      (UnrolledController(controller.controller, statement, arguments.values.map(_._1).toSet),
-       errors ++ controllerErrors)
+      (UnrolledCC(cc.cc, statement, arguments.values.map(_._1).toSet), errors ++ ccErrors)
     }
 
     (UnrolledPipeProgram(
-       controllers.map(_._1),
-       program.knobs,
+       ccs.map(_._1),
+       program.controllers,
        program.groups
      ),
-     controllers.map(_._2).flatten)
+     ccs.map(_._2).flatten)
   }
 }

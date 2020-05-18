@@ -76,25 +76,31 @@ object Fragment {
 
 case class Program(instructions: Seq[Instruction],
                    stackSize: Int,
-                   knobs: Map[Int, InputKnob],
+                   controllers: Map[Int, InputController],
                    groups: Map[Int, GroupDefinition],
-                   controllers: Map[Int, Int])
-case class InputKnob(group: Int, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
-object InputKnob {
-  def apply(group: Int, knob: KnobDefinition): InputKnob =
-    apply(group, knob.row, knob.column, knob.description, knob.min, knob.max, knob.step)
+                   ccs: Map[Int, Int])
+case class InputController(group: Int, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
+object InputController {
+  def apply(group: Int, controller: ControllerDefinition): InputController =
+    apply(group,
+          controller.row,
+          controller.column,
+          controller.description,
+          controller.min,
+          controller.max,
+          controller.step)
 }
 
 object Program {
-  def prettyPrint(key: Int, knob: InputKnob, indentation: Int) {
-    NativePipeStatement.printIndented(s"$key: $knob", indentation)
+  def prettyPrint(key: Int, controller: InputController, indentation: Int) {
+    NativePipeStatement.printIndented(s"$key: $controller", indentation)
   }
 
   def prettyPrint(program: Program) {
     println(s"Stack size: ${program.stackSize}")
-    println(s"Knobs:")
-    for ((key, knob) <- program.knobs) {
-      prettyPrint(key, knob, 2)
+    println(s"Controllers:")
+    for ((key, controller) <- program.controllers) {
+      prettyPrint(key, controller, 2)
     }
     println("Groups:")
     for ((k, v) <- program.groups) {
@@ -104,8 +110,8 @@ object Program {
     for (i <- program.instructions) {
       NativePipeStatement.printIndented(i, 2)
     }
-    println("Controllers:")
-    for ((k, v) <- program.controllers) {
+    println("CCs:")
+    for ((k, v) <- program.ccs) {
       NativePipeStatement.printIndented(s"$k: $v", 2)
     }
   }
@@ -140,7 +146,7 @@ object Assembler {
           elseOffset)
       case constant: Constant =>
         Fragment(NullaryInstruction(CNT, constant, offset), offset)
-      case KnobDefinition(identifier, _, _, _, _, _, _, _) =>
+      case ControllerDefinition(identifier, _, _, _, _, _, _, _) =>
         Fragment(UnaryInstruction(LOAD, values(identifier), offset), offset)
       case _: Noop =>
         Fragment.empty
@@ -148,24 +154,20 @@ object Assembler {
     }
 
   def assemble(unrolledProgram: UnrolledPipeProgram): Program = {
-    val valueMapping = unrolledProgram.controllers.flatMap(_.inputs.map(_.identifier)).toSet.zipWithIndex.toMap
+    val valueMapping = unrolledProgram.ccs.flatMap(_.inputs.map(_.identifier)).toSet.zipWithIndex.toMap
     val groupMapping = unrolledProgram.groups.keySet.zipWithIndex.toMap
-    val controllers = for ((controller, i) <- unrolledProgram.controllers.zipWithIndex) yield {
+    val ccs = for ((cc, i) <- unrolledProgram.ccs.zipWithIndex) yield {
       val stackOffset = valueMapping.size + i
-      val fragment = assemble(controller.statement, stackOffset, valueMapping)
-      (stackOffset, fragment.instructions, fragment.maxOffset + 1, controller.controller)
+      val fragment = assemble(cc.statement, stackOffset, valueMapping)
+      (stackOffset, fragment.instructions, fragment.maxOffset + 1, cc.cc)
     }
-    val knobs = unrolledProgram.knobs.map {
-      case (id, knob) => valueMapping(id) -> InputKnob(groupMapping(knob.groupIdentifier), knob)
+    val controllers = unrolledProgram.controllers.map {
+      case (id, controller) => valueMapping(id) -> InputController(groupMapping(controller.groupIdentifier), controller)
     }
     val groups = unrolledProgram.groups.map {
       case (id, group) => groupMapping(id) -> group
     }
-    Program(controllers.map(_._2).flatten,
-            controllers.map(_._3).max,
-            knobs,
-            groups,
-            controllers.map(c => c._1 -> c._4).toMap)
+    Program(ccs.map(_._2).flatten, ccs.map(_._3).max, controllers, groups, ccs.map(c => c._1 -> c._4).toMap)
   }
 
 }
