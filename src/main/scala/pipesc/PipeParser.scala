@@ -408,6 +408,14 @@ object PipeParser extends Parsers {
 
   def isDefined(fn: FunctionApplication, functions: Map[NSIdentifier, FunctionDefinition]): Boolean =
     !Instruction.nativeFunctions.contains(fn.identifier) && !functions.contains(fn.identifier)
+
+  def parseTokens(tokens: List[PipeToken], moduleNs: Seq[String]): Either[Seq[CompilerError], PipeProgram] =
+    file(moduleNs)(new PipeTokenReader(tokens)) match {
+      case PipeParser.NoSuccess(msg, next) =>
+        Left(Seq(CompilerError(next.pos, msg)))
+      case PipeParser.Success(ast, next) =>
+        Right(ast)
+    }
 }
 
 class PipeTokenReader(tokens: Seq[PipeToken]) extends Reader[PipeToken] {

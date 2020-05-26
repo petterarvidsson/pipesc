@@ -113,6 +113,13 @@ object PipeLexer extends RegexParsers {
         r
     }
   }
+  def parseString(code: String): Either[Seq[CompilerError], List[PipeToken]] =
+    parse(tokens, code) match {
+      case PipeLexer.NoSuccess(msg, next) =>
+        Left(Seq(CompilerError(next.pos, msg)))
+      case PipeLexer.Success(tokens, next) =>
+        Right(tokens)
+    }
 
   override def skipWhitespace = true
   override val whiteSpace = "[ \t]+".r

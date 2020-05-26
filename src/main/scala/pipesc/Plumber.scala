@@ -27,9 +27,6 @@ object Plumber {
   val MidiType = IntegerType(Seq(MidiBounds))
   val BoolBounds = MinMax(0, 1)
   val BoolType = IntegerType(Seq(BoolBounds))
-}
-
-class Plumber(val path: Path) {
 
   def nativeApplication(
       identifier: NSIdentifier,
@@ -85,8 +82,7 @@ class Plumber(val path: Path) {
                  errors)
               } else {
                 (statement,
-                 errors :+ CompilerError(path,
-                                         a.pos,
+                 errors :+ CompilerError(a.pos,
                                          s"Scale can not scale to a non-continuous type ${expectedType.prettyPrint}"))
               }
           }
@@ -94,11 +90,10 @@ class Plumber(val path: Path) {
           val argumentsString = argumentsMinMax.map(_.prettyPrint).mkString(", ")
           val errorString =
             s"Method ${a.identifier.name} with signature:\n  ${Type.signatureString(f.signature)}\ncannot be applied to: ($argumentsString)"
-          (NativePipeStatement.NoopStatement,
-           unrolledArguments.map(_._2).flatten :+ CompilerError(path, a.pos, errorString))
+          (NativePipeStatement.NoopStatement, unrolledArguments.map(_._2).flatten :+ CompilerError(a.pos, errorString))
         }
       case None =>
-        (NativePipeStatement.NoopStatement, Seq(CompilerError(path, a.pos, s"No such method ${a.identifier.name}")))
+        (NativePipeStatement.NoopStatement, Seq(CompilerError(a.pos, s"No such method ${a.identifier.name}")))
     }
   }
 
@@ -131,8 +126,9 @@ class Plumber(val path: Path) {
     unroll(cc.statement, arguments, functions, Plumber.MidiType)
   }
 
-  def unroll(program: PipeProgram): (UnrolledPipeProgram, Seq[CompilerError]) = {
-    val ccs = for (cc <- program.ccs) yield {
+  def parseAst(program: PipeProgram): Either[Seq[CompilerError], UnrolledPipeProgram] = {
+
+    val ccs = (for (cc <- program.ccs) yield {
       val arguments: Map[String, (ControllerDefinition, Seq[CompilerError])] = cc.arguments.map { identifier =>
         (identifier, (program.controllers(identifier), Seq.empty))
       } toMap
@@ -143,20 +139,28 @@ class Plumber(val path: Path) {
       val minMax = statement.minMax
       val ccErrors = if (!Plumber.MidiBounds.withinBounds(statement.minMax)) {
         Seq(
-          CompilerError(path,
-                        cc.statement.pos,
+          CompilerError(cc.statement.pos,
                         s"${minMax.prettyPrint} is out of cc #${cc.cc} bounds [${Plumber.MidiBounds.prettyPrint}]"))
       } else {
         Seq.empty
       }
       (UnrolledCC(cc.cc, statement, arguments.values.map(_._1).toSet), errors ++ ccErrors)
+    })
+
+    val unrolledProgram = UnrolledPipeProgram(
+      ccs.map(_._1),
+      program.controllers,
+      program.groups
+    )
+
+    val errors =
+      ccs.map(_._2).flatten
+
+    if (errors.isEmpty) {
+      Right(unrolledProgram)
+    } else {
+      Left(errors)
     }
 
-    (UnrolledPipeProgram(
-       ccs.map(_._1),
-       program.controllers,
-       program.groups
-     ),
-     ccs.map(_._2).flatten)
   }
 }
