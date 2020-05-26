@@ -271,7 +271,7 @@ object PipeParser extends Parsers {
     })
 
   def intrange =
-    intnum ~ dot ~ dot ~ intnum ^^ {
+    constant ~ dot ~ dot ~ constant ^^ {
       case min ~ _ ~ _ ~ max => MinMax(min.value, max.value)
     }
 
