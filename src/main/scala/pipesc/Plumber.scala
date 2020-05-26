@@ -39,75 +39,86 @@ object Plumber {
   def unroll(f: IfStatement,
              arguments: Map[String, (NativePipeStatement, Seq[CompilerError])],
              functions: Map[NSIdentifier, Function],
+             functionsCalled: Set[NSIdentifier],
              expectedType: Type): (NativePipeStatement, Seq[CompilerError]) = {
-    val (c, cErrors) = unroll(f.cond, arguments, functions, Plumber.BoolType)
-    val (t, tErrors) = unroll(f.`then`, arguments, functions, expectedType)
-    val (e, eErrors) = unroll(f.`else`, arguments, functions, expectedType)
+    val (c, cErrors) = unroll(f.cond, arguments, functions, functionsCalled, Plumber.BoolType)
+    val (t, tErrors) = unroll(f.`then`, arguments, functions, functionsCalled, expectedType)
+    val (e, eErrors) = unroll(f.`else`, arguments, functions, functionsCalled, expectedType)
     (NativeIfStatement(c, t, e), cErrors ++ tErrors ++ eErrors)
   }
 
   def unroll(a: FunctionApplication,
              arguments: Map[String, (NativePipeStatement, Seq[CompilerError])],
              functions: Map[NSIdentifier, Function],
-             expectedType: Type): (NativePipeStatement, Seq[CompilerError]) = {
-    functions.get(a.identifier) match {
-      case Some(f) if a.arguments.size == f.signature.size =>
-        val unrolledArguments = a.arguments.zip(f.signature).map {
-          case (s, t) =>
-            unroll(s, arguments, functions, t)
-        }
-
-        val argumentsMinMax = unrolledArguments.map(_._1.minMax)
-
-        if (f.canBeAppliedTo(argumentsMinMax)) {
-          f match {
-            case fn: FunctionDefinition =>
-              unroll(fn, fn.arguments.zip(unrolledArguments).toMap, functions, expectedType)
-            case nf: NativeFunction =>
-              nativeApplication(a.identifier, nf, unrolledArguments)
-            case Scale =>
-              val (statement, errors) = unrolledArguments(0)
-              if (expectedType.intervals.size == 1) {
-                val minMax = expectedType.intervals.head
-                val factor = statement.minMax.magnitude / minMax.magnitude + 1
-                (NativeFunctionApplication(
-                   NSIdentifier(Predef.NS, Predef.Div),
-                   NativeFunctionApplication(NSIdentifier(Predef.NS, Predef.Add),
-                                             statement,
-                                             Constant(statement.minMax.offset),
-                                             Instruction.nativeFunctions(NSIdentifier(Predef.NS, Predef.Add))),
-                   Constant(factor),
-                   Instruction.nativeFunctions(NSIdentifier(Predef.NS, Predef.Div))
-                 ),
-                 errors)
-              } else {
-                (statement,
-                 errors :+ CompilerError(a.pos,
-                                         s"Scale can not scale to a non-continuous type ${expectedType.prettyPrint}"))
-              }
+             functionsCalled: Set[NSIdentifier],
+             expectedType: Type): (NativePipeStatement, Seq[CompilerError]) =
+    if (!functionsCalled.contains(a.identifier)) {
+      functions.get(a.identifier) match {
+        case Some(f) if a.arguments.size == f.signature.size =>
+          val unrolledArguments = a.arguments.zip(f.signature).map {
+            case (s, t) =>
+              unroll(s, arguments, functions, functionsCalled, t)
           }
-        } else {
-          val argumentsString = argumentsMinMax.map(_.prettyPrint).mkString(", ")
-          val errorString =
-            s"Method ${a.identifier.name} with signature:\n  ${Type.signatureString(f.signature)}\ncannot be applied to: ($argumentsString)"
-          (NativePipeStatement.NoopStatement, unrolledArguments.map(_._2).flatten :+ CompilerError(a.pos, errorString))
-        }
-      case None =>
-        (NativePipeStatement.NoopStatement, Seq(CompilerError(a.pos, s"No such method ${a.identifier.name}")))
+
+          val argumentsMinMax = unrolledArguments.map(_._1.minMax)
+
+          if (f.canBeAppliedTo(argumentsMinMax)) {
+            f match {
+              case fn: FunctionDefinition =>
+                unroll(fn,
+                       fn.arguments.zip(unrolledArguments).toMap,
+                       functions,
+                       functionsCalled + a.identifier,
+                       expectedType)
+              case nf: NativeFunction =>
+                nativeApplication(a.identifier, nf, unrolledArguments)
+              case Scale =>
+                val (statement, errors) = unrolledArguments(0)
+                if (expectedType.intervals.size == 1) {
+                  val minMax = expectedType.intervals.head
+                  val factor = statement.minMax.magnitude / minMax.magnitude + 1
+                  (NativeFunctionApplication(
+                     NSIdentifier(Predef.NS, Predef.Div),
+                     NativeFunctionApplication(NSIdentifier(Predef.NS, Predef.Add),
+                                               statement,
+                                               Constant(statement.minMax.offset),
+                                               Instruction.nativeFunctions(NSIdentifier(Predef.NS, Predef.Add))),
+                     Constant(factor),
+                     Instruction.nativeFunctions(NSIdentifier(Predef.NS, Predef.Div))
+                   ),
+                   errors)
+                } else {
+                  (statement,
+                   errors :+ CompilerError(a.pos,
+                                           s"Scale can not scale to a non-continuous type ${expectedType.prettyPrint}"))
+                }
+            }
+          } else {
+            val argumentsString = argumentsMinMax.map(_.prettyPrint).mkString(", ")
+            val errorString =
+              s"Method ${a.identifier.name} with signature:\n  ${Type.signatureString(f.signature)}\ncannot be applied to: ($argumentsString)"
+            (NativePipeStatement.NoopStatement,
+             unrolledArguments.map(_._2).flatten :+ CompilerError(a.pos, errorString))
+          }
+        case None =>
+          (NativePipeStatement.NoopStatement, Seq(CompilerError(a.pos, s"No such method ${a.identifier.name}")))
+      }
+    } else {
+      (NativePipeStatement.NoopStatement, Seq(CompilerError(a.pos, s"Recursive call of ${a.identifier.name} detected")))
     }
-  }
 
   def unroll(statement: PipeStatement,
              arguments: Map[String, (NativePipeStatement, Seq[CompilerError])],
              functions: Map[NSIdentifier, Function],
+             functionsCalled: Set[NSIdentifier],
              expectedType: Type): (NativePipeStatement, Seq[CompilerError]) = {
     statement match {
       case Value(identifier) =>
         arguments(identifier)
       case f: FunctionApplication =>
-        unroll(f, arguments, functions, expectedType)
+        unroll(f, arguments, functions, functionsCalled, expectedType)
       case f: IfStatement =>
-        unroll(f, arguments, functions, expectedType)
+        unroll(f, arguments, functions, functionsCalled, expectedType)
       case c: Constant =>
         (c, Seq.empty)
     }
@@ -116,14 +127,15 @@ object Plumber {
   def unroll(fn: FunctionDefinition,
              arguments: Map[String, (NativePipeStatement, Seq[CompilerError])],
              functions: Map[NSIdentifier, Function],
+             functionsCalled: Set[NSIdentifier],
              expectedType: Type): (NativePipeStatement, Seq[CompilerError]) = {
-    unroll(fn.statement, arguments, functions, expectedType)
+    unroll(fn.statement, arguments, functions, functionsCalled, expectedType)
   }
 
   def unroll(cc: MidiCCDefinition,
              arguments: Map[String, (NativePipeStatement, Seq[CompilerError])],
              functions: Map[NSIdentifier, Function]): (NativePipeStatement, Seq[CompilerError]) = {
-    unroll(cc.statement, arguments, functions, Plumber.MidiType)
+    unroll(cc.statement, arguments, functions, Set.empty[NSIdentifier], Plumber.MidiType)
   }
 
   def parseAst(program: PipeProgram): Either[Seq[CompilerError], UnrolledPipeProgram] = {
