@@ -26,10 +26,34 @@ sealed trait Type extends Positional {
 }
 
 object Type {
+
+  def merge(intervals: Seq[MinMax]): Seq[MinMax] =
+    intervals.sortBy(_.min) match {
+      case head :: tail =>
+        val (m, e) = tail.foldLeft((Seq.empty[MinMax], head)) { (acc, e) =>
+          val (mergedIntervals, last) = acc
+          if (MinMax.overlaps(e, last)) {
+            (mergedIntervals, MinMax.merge(last, e))
+          } else {
+            (mergedIntervals :+ last, e)
+          }
+        }
+        m :+ e
+      case l => l
+    }
+
+
+  def merge(t1: Type, t2: Type): Type =
+    IntegerType(merge(t1.intervals ++ t2.intervals))
+
   def signatureString(signature: Seq[Type]): String = {
     val s = signature.map(_.prettyPrint).mkString(", ")
     s"($s)"
   }
+  def withinBounds(t1: Type, t2: Type): Boolean =
+    t1.intervals.foldLeft(true) { (acc, bound) =>
+      acc & MinMax.withinBounds(bound, t2.intervals)
+    }
 }
 
 case class IntegerType(override val intervals: Seq[MinMax]) extends Type {
@@ -70,6 +94,8 @@ case class MinMax(min: Int, max: Int) {
   def magnitude = max - min
   def withinBounds(m: MinMax): Boolean =
     m.max <= max && m.min >= min
+  def withinBounds(i: Int): Boolean =
+    i <= max && i >= min
   def prettyPrint =
     if (min == max) {
       s"$min"
@@ -79,6 +105,15 @@ case class MinMax(min: Int, max: Int) {
 }
 
 object MinMax {
+  def overlaps(m1: MinMax, m2: MinMax): Boolean =
+    (m1.min <= (m2.max + 1) && m1.min >= (m2.min - 1)) ||
+      (m1.max <= (m2.max + 1) && m1.max >= (m2.min - 1)) ||
+      (m2.min <= (m1.max + 1) && m2.min >= (m1.min - 1)) ||
+      (m2.max <= (m1.max + 1) && m2.max >= (m1.min - 1))
+
+  def merge(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(math.min(m1.min, m2.min), math.max(m1.max, m2.max))
+
   def withinBounds(minMax: MinMax, bounds: Seq[MinMax]): Boolean =
     bounds.foldLeft(false) { (acc, bound) =>
       acc | bound.withinBounds(minMax)
@@ -86,7 +121,7 @@ object MinMax {
 }
 
 sealed trait NativePipeStatement extends Positional {
-  def minMax: MinMax
+  def returnType: Type
 }
 
 object NativePipeStatement {
@@ -95,8 +130,8 @@ object NativePipeStatement {
     println(s"$indent$s")
   }
 
-  def minMax(statement: NativePipeStatement): String =
-    s"[${statement.minMax.min}, ${statement.minMax.max}]"
+  def returnType(statement: NativePipeStatement): String =
+    statement.returnType.prettyPrint
 
   def pos(positional: Positional): String =
     s"${positional.pos}"
@@ -104,20 +139,20 @@ object NativePipeStatement {
   def prettyPrint(statement: NativePipeStatement, indentation: Int) {
     statement match {
       case s @ ControllerDefinition(identifier, _, _, _, _, _, _, _) =>
-        printIndented(s"$identifier ${minMax(s)} ${pos(s)}", indentation)
+        printIndented(s"$identifier ${returnType(s)} ${pos(s)}", indentation)
       case s @ NativeFunctionApplication(identifier, arg1, arg2, _) =>
         printIndented(s"${identifier.name}(", indentation)
         prettyPrint(arg1, indentation + 2)
         prettyPrint(arg2, indentation + 2)
-        printIndented(s") ${minMax(s)} ${pos(identifier)}", indentation)
+        printIndented(s") ${returnType(s)} ${pos(identifier)}", indentation)
       case s @ NativeIfStatement(cond, arg1, arg2) =>
         printIndented("if(", indentation)
         prettyPrint(cond, indentation + 2)
         prettyPrint(arg1, indentation + 2)
         prettyPrint(arg2, indentation + 2)
-        printIndented(s") ${minMax(s)} ${pos(s)}", indentation)
+        printIndented(s") ${returnType(s)} ${pos(s)}", indentation)
       case c: Constant =>
-        printIndented(s"${c.value} ${minMax(c)} ${pos(c)}", indentation)
+        printIndented(s"${c.value} ${returnType(c)} ${pos(c)}", indentation)
       case _: Noop =>
         printIndented("noop", indentation)
     }
@@ -133,7 +168,7 @@ case class IfStatement(cond: PipeStatement, `then`: PipeStatement, `else`: PipeS
 case class Value(identifier: String) extends PipeStatement
 
 case class Constant(value: Int) extends PipeStatement with NativePipeStatement {
-  def minMax = MinMax(value, value)
+  def returnType = IntegerType(Seq(MinMax(value, value)))
 }
 
 case class NativeFunctionApplication(identifier: NSIdentifier,
@@ -141,23 +176,20 @@ case class NativeFunctionApplication(identifier: NSIdentifier,
                                      arg2: NativePipeStatement,
                                      nf: NativeFunction)
     extends NativePipeStatement {
-  def minMax = nf.minMax(arg1.minMax, arg2.minMax)
+  def returnType = nf.returnType(arg1.returnType, arg2.returnType)
 }
 
 case class NativeIfStatement(cond: NativePipeStatement, `then`: NativePipeStatement, `else`: NativePipeStatement)
     extends NativePipeStatement {
-  def minMax = {
-    MinMax(math.min(`then`.minMax.min, `else`.minMax.min), math.max(`then`.minMax.max, `else`.minMax.max))
-  }
+  def returnType = Type.merge(`then`.returnType, `else`.returnType)
 }
 
 sealed trait Function {
   def signature: Seq[Type]
-  def canBeAppliedTo(args: Seq[MinMax]): Boolean =
+  def canBeAppliedTo(args: Seq[Type]): Boolean =
     args.size == signature.size && args.zip(signature).foldLeft(true) { (acc, e) =>
-      acc & MinMax.withinBounds(e._1, e._2.intervals)
+      acc & Type.withinBounds(e._1, e._2)
     }
-
 }
 
 case class FunctionDefinition(identifier: NSIdentifier,
@@ -167,7 +199,7 @@ case class FunctionDefinition(identifier: NSIdentifier,
     extends Function
     with Positional
 
-case class NativeFunction(signature: Seq[Type], minMax: (MinMax, MinMax) => MinMax) extends Function
+case class NativeFunction(signature: Seq[Type], returnType: (Type, Type) => Type) extends Function
 
 case object Scale extends Function {
   override val signature: Seq[Type] = Seq(IntegerType(Seq(MinMax(Instruction.IntMin, Instruction.IntMax))))
@@ -182,11 +214,11 @@ case class ControllerDefinition(identifier: String,
                                 max: Int,
                                 step: Int)
     extends NativePipeStatement {
-  def minMax = MinMax(min, max)
+  def returnType = IntegerType(Seq(MinMax(min, max)))
 }
 
 class Noop extends NativePipeStatement {
-  override def minMax = MinMax(0, 0)
+  override def returnType = IntegerType(Seq(MinMax(0, 0)))
 }
 
 case class MidiCCDefinition(cc: Int, arguments: Seq[String], statement: PipeStatement) extends Positional

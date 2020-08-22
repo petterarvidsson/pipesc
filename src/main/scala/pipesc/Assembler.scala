@@ -35,6 +35,14 @@ object Instruction {
     NSIdentifier(Predef.NS, Predef.Mod) -> MOD
   )
 
+  def typeMinMax(f: (MinMax, MinMax) => MinMax)(t1: Type, t2: Type): Type =
+    IntegerType(Type.merge(for {
+      m1 <- t1.intervals
+      m2 <- t2.intervals
+    } yield {
+      f(m1, m2)
+    }))
+
   def addMinMax(m1: MinMax, m2: MinMax): MinMax =
     MinMax(m1.min + m2.min, m1.max + m2.max)
 
@@ -54,11 +62,11 @@ object Instruction {
   val FullIntRange = IntegerType(Seq(MinMax(IntMin, IntMax)))
 
   val nativeFunctions = Map[NSIdentifier, NativeFunction](
-    NSIdentifier(Predef.NS, Predef.Add) -> NativeFunction(Seq(FullIntRange, FullIntRange), addMinMax),
-    NSIdentifier(Predef.NS, Predef.Sub) -> NativeFunction(Seq(FullIntRange, FullIntRange), subMinMax),
-    NSIdentifier(Predef.NS, Predef.Mul) -> NativeFunction(Seq(FullIntRange, FullIntRange), mulMinMax),
-    NSIdentifier(Predef.NS, Predef.Div) -> NativeFunction(Seq(FullIntRange, NonZero), divMinMax),
-    NSIdentifier(Predef.NS, Predef.Mod) -> NativeFunction(Seq(FullIntRange, NonZero), modMinMax)
+    NSIdentifier(Predef.NS, Predef.Add) -> NativeFunction(Seq(FullIntRange, FullIntRange), typeMinMax(addMinMax)),
+    NSIdentifier(Predef.NS, Predef.Sub) -> NativeFunction(Seq(FullIntRange, FullIntRange), typeMinMax(subMinMax)),
+    NSIdentifier(Predef.NS, Predef.Mul) -> NativeFunction(Seq(FullIntRange, FullIntRange), typeMinMax(mulMinMax)),
+    NSIdentifier(Predef.NS, Predef.Div) -> NativeFunction(Seq(FullIntRange, NonZero), typeMinMax(divMinMax)),
+    NSIdentifier(Predef.NS, Predef.Mod) -> NativeFunction(Seq(FullIntRange, NonZero), typeMinMax(modMinMax))
   )
 
 }

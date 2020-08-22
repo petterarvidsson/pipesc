@@ -60,9 +60,9 @@ object Plumber {
               unroll(s, arguments, functions, functionsCalled, t)
           }
 
-          val argumentsMinMax = unrolledArguments.map(_._1.minMax)
+          val argumentTypes = unrolledArguments.map(_._1.returnType)
 
-          if (f.canBeAppliedTo(argumentsMinMax)) {
+          if (f.canBeAppliedTo(argumentTypes)) {
             f match {
               case fn: FunctionDefinition =>
                 unroll(fn,
@@ -74,14 +74,15 @@ object Plumber {
                 nativeApplication(a.identifier, nf, unrolledArguments)
               case Scale =>
                 val (statement, errors) = unrolledArguments(0)
-                if (expectedType.intervals.size == 1) {
+                if (expectedType.intervals.size == 1 && statement.returnType.intervals.size == 1) {
                   val minMax = expectedType.intervals.head
-                  val factor = statement.minMax.magnitude / minMax.magnitude + 1
+                  val statementMinMax = statement.returnType.intervals.head
+                  val factor = statementMinMax.magnitude / minMax.magnitude + 1
                   (NativeFunctionApplication(
                      NSIdentifier(Predef.NS, Predef.Div),
                      NativeFunctionApplication(NSIdentifier(Predef.NS, Predef.Add),
                                                statement,
-                                               Constant(statement.minMax.offset),
+                                               Constant(statementMinMax.offset),
                                                Instruction.nativeFunctions(NSIdentifier(Predef.NS, Predef.Add))),
                      Constant(factor),
                      Instruction.nativeFunctions(NSIdentifier(Predef.NS, Predef.Div))
@@ -90,11 +91,11 @@ object Plumber {
                 } else {
                   (statement,
                    errors :+ CompilerError(a.pos,
-                                           s"Scale can not scale to a non-continuous type ${expectedType.prettyPrint}"))
+                     s"Scale can not scale from or to a non-continuous type ${statement.returnType.prettyPrint} => ${expectedType.prettyPrint}"))
                 }
             }
           } else {
-            val argumentsString = argumentsMinMax.map(_.prettyPrint).mkString(", ")
+            val argumentsString = argumentTypes.map(_.prettyPrint).mkString(", ")
             val errorString =
               s"Method ${a.identifier.name} with signature:\n  ${Type.signatureString(f.signature)}\ncannot be applied to: ($argumentsString)"
             (NativePipeStatement.NoopStatement,
@@ -148,11 +149,11 @@ object Plumber {
         cc,
         arguments,
         (program.functions ++ Instruction.nativeFunctions) + (NSIdentifier(Predef.NS, Predef.Scale) -> Scale))
-      val minMax = statement.minMax
-      val ccErrors = if (!Plumber.MidiBounds.withinBounds(statement.minMax)) {
+      val returnType = statement.returnType
+      val ccErrors = if (!Type.withinBounds(returnType, MidiType)) {
         Seq(
           CompilerError(cc.statement.pos,
-                        s"${minMax.prettyPrint} is out of cc #${cc.cc} bounds [${Plumber.MidiBounds.prettyPrint}]"))
+                        s"${returnType.prettyPrint} is out of cc #${cc.cc} bounds [${MidiType.prettyPrint}]"))
       } else {
         Seq.empty
       }

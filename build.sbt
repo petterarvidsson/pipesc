@@ -12,7 +12,7 @@ scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-language:postf
 
 libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.6"
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.2" % "test"
 
 releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies,
