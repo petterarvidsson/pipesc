@@ -9,6 +9,9 @@ case class UnaryInstruction(opcode: Int, address: Int, out: Int) extends Instruc
 case class NullaryInstruction(opcode: Int, constant: Constant, out: Int) extends Instruction
 
 object Instruction {
+  val IntMax = 2147483647
+  val IntMin = -2147483646
+
   // ALU
   val ADD = 0x00
   val SUB = 0x01
@@ -31,6 +34,41 @@ object Instruction {
     NSIdentifier(Predef.NS, Predef.Div) -> DIV,
     NSIdentifier(Predef.NS, Predef.Mod) -> MOD
   )
+
+  def typeMinMax(f: (MinMax, MinMax) => MinMax)(t1: Type, t2: Type): Type =
+    IntegerType(Type.merge(for {
+      m1 <- t1.intervals
+      m2 <- t2.intervals
+    } yield {
+      f(m1, m2)
+    }))
+
+  def addMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min + m2.min, m1.max + m2.max)
+
+  def subMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min - m2.max, m1.max - m2.min)
+
+  def mulMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min * m2.min, m1.max * m2.max)
+
+  def divMinMax(m1: MinMax, m2: MinMax): MinMax =
+    MinMax(m1.min / m2.max, m1.max / m2.min)
+
+  def modMinMax(m1: MinMax, m2: MinMax): MinMax =
+    m2
+
+  val NonZero = IntegerType(Seq(MinMax(IntMin, -1), MinMax(1, IntMax)))
+  val FullIntRange = IntegerType(Seq(MinMax(IntMin, IntMax)))
+
+  val nativeFunctions = Map[NSIdentifier, NativeFunction](
+    NSIdentifier(Predef.NS, Predef.Add) -> NativeFunction(Seq(FullIntRange, FullIntRange), typeMinMax(addMinMax)),
+    NSIdentifier(Predef.NS, Predef.Sub) -> NativeFunction(Seq(FullIntRange, FullIntRange), typeMinMax(subMinMax)),
+    NSIdentifier(Predef.NS, Predef.Mul) -> NativeFunction(Seq(FullIntRange, FullIntRange), typeMinMax(mulMinMax)),
+    NSIdentifier(Predef.NS, Predef.Div) -> NativeFunction(Seq(FullIntRange, NonZero), typeMinMax(divMinMax)),
+    NSIdentifier(Predef.NS, Predef.Mod) -> NativeFunction(Seq(FullIntRange, NonZero), typeMinMax(modMinMax))
+  )
+
 }
 
 case class Fragment(instructions: Seq[Instruction], maxOffset: Int) {
@@ -41,25 +79,36 @@ case class Fragment(instructions: Seq[Instruction], maxOffset: Int) {
 object Fragment {
   def apply(instruction: Instruction, offset: Int): Fragment =
     Fragment(Seq(instruction), offset)
+  val empty = apply(Seq.empty, 0)
 }
 
-case class Program(instructions: Seq[Instruction], stackSize: Int, knobs: Map[Int, InputKnob], groups: Map[Int, GroupDefinition], controllers: Map[Int, Int])
-case class InputKnob(group: Int, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
-object InputKnob {
-  def apply(group: Int, knob: KnobDefinition): InputKnob =
-    apply(group, knob.row, knob.column, knob.description, knob.min, knob.max, knob.step)
+case class Program(instructions: Seq[Instruction],
+                   stackSize: Int,
+                   controllers: Map[Int, InputController],
+                   groups: Map[Int, GroupDefinition],
+                   ccs: Map[Int, Int])
+case class InputController(group: Int, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
+object InputController {
+  def apply(group: Int, controller: ControllerDefinition): InputController =
+    apply(group,
+          controller.row,
+          controller.column,
+          controller.description,
+          controller.min,
+          controller.max,
+          controller.step)
 }
 
 object Program {
-  def prettyPrint(key: Int, knob: InputKnob, indentation: Int) {
-    NativePipeStatement.printIndented(s"$key: $knob", indentation)
+  def prettyPrint(key: Int, controller: InputController, indentation: Int) {
+    NativePipeStatement.printIndented(s"$key: $controller", indentation)
   }
 
   def prettyPrint(program: Program) {
     println(s"Stack size: ${program.stackSize}")
-    println(s"Knobs:")
-    for ((key, knob) <- program.knobs) {
-      prettyPrint(key, knob, 2)
+    println(s"Controllers:")
+    for ((key, controller) <- program.controllers) {
+      prettyPrint(key, controller, 2)
     }
     println("Groups:")
     for ((k, v) <- program.groups) {
@@ -69,8 +118,8 @@ object Program {
     for (i <- program.instructions) {
       NativePipeStatement.printIndented(i, 2)
     }
-    println("Controllers:")
-    for ((k, v) <- program.controllers) {
+    println("CCs:")
+    for ((k, v) <- program.ccs) {
       NativePipeStatement.printIndented(s"$k: $v", 2)
     }
   }
@@ -83,7 +132,7 @@ object Assembler {
 
   def assemble(statement: NativePipeStatement, offset: Int, values: Map[String, Int]): Fragment =
     statement match {
-      case NativeFunctionApplication(identifier, arg1, arg2) =>
+      case NativeFunctionApplication(identifier, arg1, arg2, _) =>
         val outOffset = offset
         val arg1Offset = offset + 1
         val arg1Fragment = assemble(arg1, arg1Offset, values)
@@ -105,25 +154,28 @@ object Assembler {
           elseOffset)
       case constant: Constant =>
         Fragment(NullaryInstruction(CNT, constant, offset), offset)
-      case Value(identifier) =>
+      case ControllerDefinition(identifier, _, _, _, _, _, _, _) =>
         Fragment(UnaryInstruction(LOAD, values(identifier), offset), offset)
+      case _: Noop =>
+        Fragment.empty
+
     }
 
   def assemble(unrolledProgram: UnrolledPipeProgram): Program = {
-    val valueMapping = unrolledProgram.controllers.flatMap(_.inputs.map(_.identifier)).toSet.zipWithIndex.toMap
+    val valueMapping = unrolledProgram.ccs.flatMap(_.inputs.map(_.identifier)).toSet.zipWithIndex.toMap
     val groupMapping = unrolledProgram.groups.keySet.zipWithIndex.toMap
-    val controllers = for ((controller, i) <- unrolledProgram.controllers.zipWithIndex) yield {
+    val ccs = for ((cc, i) <- unrolledProgram.ccs.zipWithIndex) yield {
       val stackOffset = valueMapping.size + i
-      val fragment = assemble(controller.statement, stackOffset, valueMapping)
-      (stackOffset, fragment.instructions, fragment.maxOffset + 1, controller.controller)
+      val fragment = assemble(cc.statement, stackOffset, valueMapping)
+      (stackOffset, fragment.instructions, fragment.maxOffset + 1, cc.cc)
     }
-    val knobs = unrolledProgram.knobs.map {
-      case (id, knob) => valueMapping(id) -> InputKnob(groupMapping(knob.groupIdentifier), knob)
+    val controllers = unrolledProgram.controllers.map {
+      case (id, controller) => valueMapping(id) -> InputController(groupMapping(controller.groupIdentifier), controller)
     }
     val groups = unrolledProgram.groups.map {
       case (id, group) => groupMapping(id) -> group
     }
-    Program(controllers.map(_._2).flatten, controllers.map(_._3).max, knobs, groups, controllers.map(c => c._1 -> c._4).toMap)
+    Program(ccs.map(_._2).flatten, ccs.map(_._3).max, controllers, groups, ccs.map(c => c._1 -> c._4).toMap)
   }
 
 }

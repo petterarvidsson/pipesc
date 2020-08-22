@@ -8,12 +8,12 @@ import Instruction._
 object VM {
   def run(program: Program, args: (String, Int)*): Array[Int] = {
     val memory = Array.ofDim[Int](program.stackSize)
-    val knobs = program.knobs.map {
-      case (index, knob) =>
-        knob.description.text -> index
+    val controllers = program.controllers.map {
+      case (index, controller) =>
+        controller.description.text -> index
     }
-    for ((knob, value) <- args) {
-      memory.update(knobs(knob), value)
+    for ((controller, value) <- args) {
+      memory.update(controllers(controller), value)
     }
     for (i <- program.instructions) {
       i match {
@@ -28,15 +28,16 @@ object VM {
         case BinaryInstruction(ADD, arg1, arg2, out) => memory.update(out, memory(arg1) + memory(arg2))
         case BinaryInstruction(MUL, arg1, arg2, out) => memory.update(out, memory(arg1) * memory(arg2))
         case BinaryInstruction(SUB, arg1, arg2, out) => memory.update(out, memory(arg1) - memory(arg2))
-        case BinaryInstruction(DIV, arg1, arg2, out) => memory.update(out, memory(arg1) / memory(arg2))
+        case BinaryInstruction(DIV, arg1, arg2, out) =>
+          if (memory(arg2) != 0) memory.update(out, memory(arg1) / memory(arg2))
         case BinaryInstruction(MOD, arg1, arg2, out) => memory.update(out, memory(arg1) % memory(arg2))
         case UnaryInstruction(LOAD, address, out)    => memory.update(out, memory(address))
-        case NullaryInstruction(CNT, constant, out)  => memory.update(out, constant.value.value)
+        case NullaryInstruction(CNT, constant, out)  => memory.update(out, constant.value)
       }
     }
 
     println("Result of AST run:")
-    for((index, cc) <- program.controllers) {
+    for ((index, cc) <- program.ccs) {
       println(s"CC$cc = ${memory(index)}")
     }
     memory
@@ -62,7 +63,7 @@ object VM {
     val numberOfGroups = binary.get()
 
     // Read and discard all groups
-    for(i <- 0 until numberOfGroups) {
+    for (i <- 0 until numberOfGroups) {
       val rowFrom = binary.get()
       val columnFrom = binary.get()
       val rowTo = binary.get()
@@ -73,11 +74,11 @@ object VM {
       val description = new String(descriptionBytes, StandardCharsets.UTF_8)
     }
 
-    // Get number of knobs
-    val numberOfKnobs = binary.get()
+    // Get number of controllers
+    val numberOfControllers = binary.get()
 
-    // Read all knobs and set arguments based on which knob they controll
-    for(i <- 0 until numberOfKnobs) {
+    // Read all controllers and set arguments based on which controller they controll
+    for (i <- 0 until numberOfControllers) {
       val group = binary.get()
       val row = binary.get()
       val column = binary.get()
@@ -92,13 +93,13 @@ object VM {
       memory.update(i, argMap(description))
     }
 
-    val numberOfControllers = binary.getShort()
+    val numberOfCcs = binary.getShort()
 
-    // Read all controllers
-    val controllers = Map((for(i <- 0 until numberOfControllers) yield {
+    // Read all ccs
+    val ccs = Map((for (i <- 0 until numberOfCcs) yield {
       val memoryOffset = binary.getShort()
-      val controller = binary.getShort()
-      memoryOffset -> controller
+      val cc = binary.getShort()
+      memoryOffset -> cc
     }): _*)
 
     val buffer = ByteBuffer.wrap(program).order(ByteOrder.BIG_ENDIAN)
@@ -119,15 +120,17 @@ object VM {
             memory.update(out, memory(arg2))
           }
         case ADD  => memory.update(out, (memory(arg1) + memory(arg2)))
+        case SUB  => memory.update(out, (memory(arg1) - memory(arg2)))
         case MUL  => memory.update(out, (memory(arg1) * memory(arg2)))
+        case DIV  => if (memory(arg2) != 0) memory.update(out, (memory(arg1) / memory(arg2)))
         case LOAD => memory.update(out, memory(arg1))
-        case CNT  => memory.update(out, arg1)
+        case CNT  => memory.update(out, arg)
       }
     }
-    memory
+    println(memory.toSeq)
 
-    for((memoryOffset, controller) <- controllers) yield {
-      controller -> memory(memoryOffset)
+    for ((memoryOffset, cc) <- ccs) yield {
+      cc -> memory(memoryOffset)
     }
   }
 
