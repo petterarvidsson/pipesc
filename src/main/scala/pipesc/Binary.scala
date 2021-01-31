@@ -21,7 +21,9 @@ import java.nio.{ByteBuffer, ByteOrder}
   * x x | <description> |
   * | 16 bits: <number of ccs> |
   * x | 16 bits: <memory offset> |
-  * x | 16 bits: <CC#> |
+  * x | 8 bits: <cc type> (CC=0, RPN=1, NRPN=2)
+  * x | 8 bits: <CC arg1> |
+  * x | 8 bits: <CC arg2> |
   */
 object Binary {
   val CurrentVersion = 0.toShort
@@ -81,8 +83,30 @@ object Binary {
       .putShort(cc._1.toShort)
       .putShort(cc._2.toShort)
 
-  private def binaryEncodeCcs(buffer: ByteBuffer, ccs: Seq[(Int, Int)]): ByteBuffer =
-    ccs.foldLeft(buffer.putShort(ccs.size.toShort))(binaryEncode(_, _))
+  private def binaryEncodeCc(buffer: ByteBuffer, cc: (Int, MidiMessageType)): ByteBuffer =
+    cc match {
+      case (offset, MidiCC(ccNumber)) =>
+        buffer
+          .putShort(offset.toShort)
+          .put(0.toByte)
+          .put(ccNumber.toByte)
+          .put(0.toByte)
+      case (offset, MidiRPN(msb, lsb)) =>
+        buffer
+          .putShort(offset.toShort)
+          .put(0.toByte)
+          .put(msb.toByte)
+          .put(lsb.toByte)
+      case (offset, MidiNRPN(msb, lsb)) =>
+        buffer
+          .putShort(offset.toShort)
+          .put(0.toByte)
+          .put(msb.toByte)
+          .put(lsb.toByte)
+    }
+
+  private def binaryEncodeCcs(buffer: ByteBuffer, ccs: Seq[(Int, MidiMessageType)]): ByteBuffer =
+    ccs.foldLeft(buffer.putShort(ccs.size.toShort))(binaryEncodeCc(_, _))
 
   private def binaryEncodeProgram(buffer: ByteBuffer, program: Program): ByteBuffer = {
     binaryEncodeCcs(

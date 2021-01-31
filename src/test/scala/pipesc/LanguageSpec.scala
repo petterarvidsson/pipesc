@@ -25,7 +25,7 @@ class LanguageSpec extends FlatSpec with Matchers {
   """
 
     compileToProgram(code) shouldEqual Right(
-      UnrolledPipeProgram(List(UnrolledCC(74, Constant(1), Set())), Map.empty, Map.empty))
+      UnrolledPipeProgram(List(UnrolledMidiDefinition(MidiCC(74), Constant(1), Set())), Map.empty, Map.empty))
 
   }
 
@@ -39,7 +39,7 @@ class LanguageSpec extends FlatSpec with Matchers {
   """
 
     compileToProgram(code) shouldEqual Right(
-      UnrolledPipeProgram(List(UnrolledCC(74, NativeIfStatement(Constant(1), Constant(1), Constant(2)), Set())),
+      UnrolledPipeProgram(List(UnrolledMidiDefinition(MidiCC(74), NativeIfStatement(Constant(1), Constant(1), Constant(2)), Set())),
                           Map.empty,
                           Map.empty))
 
