@@ -378,10 +378,10 @@ object PipeParser extends Parsers {
 
   def midiCCDef(namespaceSeq: Seq[String]) =
     positioned {
-      midicc ~ open ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
-        case _ ~ _ ~ cc ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
+      midicc ~ open ~ constant ~ close ~ open ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
+        case _ ~ _ ~ channel ~ _ ~ _ ~ cc ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
           val arguments = args.value.map(_.name)
-          val midiCC = MidiCC(cc.value)
+          val midiCC = MidiCC(channel.value, cc.value)
           notInArgs(statement, arguments, s"definition of ${midiCC.identifier}") match {
             case None => success(MidiDefinition(midiCC, arguments, statement))
             case Some(error) => err(error)
@@ -391,10 +391,10 @@ object PipeParser extends Parsers {
 
   def midiRPNDef(namespaceSeq: Seq[String]) =
     positioned {
-      midirpn ~ open ~ constant ~ comma ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
-        case _ ~ _ ~ msb ~ _ ~ lsb ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
+      midirpn ~ open ~ constant ~ close ~ open ~ constant ~ comma ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
+        case _ ~ _ ~ channel ~ _ ~ _ ~ msb ~ _ ~ lsb ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
           val arguments = args.value.map(_.name)
-          val midiRPN = MidiRPN(msb.value, lsb.value)
+          val midiRPN = MidiRPN(channel.value, msb.value, lsb.value)
           notInArgs(statement, arguments, s"definition of ${midiRPN.identifier}") match {
             case None => success(MidiDefinition(midiRPN, arguments, statement))
             case Some(error) => err(error)
@@ -404,10 +404,10 @@ object PipeParser extends Parsers {
 
   def midiNRPNDef(namespaceSeq: Seq[String]) =
     positioned {
-      midinrpn ~ open ~ constant ~ comma ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
-        case _ ~ _ ~ msb ~ _ ~ lsb ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
+      midinrpn ~ open ~ constant ~ close ~ open ~ constant ~ comma ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
+        case _ ~ _ ~ channel ~ _ ~ _ ~ msb ~ _ ~ lsb ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
           val arguments = args.value.map(_.name)
-          val midiNRPN = MidiNRPN(msb.value, lsb.value)
+          val midiNRPN = MidiNRPN(channel.value, msb.value, lsb.value)
           notInArgs(statement, arguments, s"definition of midi ${midiNRPN.identifier}") match {
             case None => success(MidiDefinition(midiNRPN, arguments, statement))
             case Some(error) => err(error)

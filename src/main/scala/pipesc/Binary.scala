@@ -22,6 +22,7 @@ import java.nio.{ByteBuffer, ByteOrder}
   * | 16 bits: <number of ccs> |
   * x | 16 bits: <memory offset> |
   * x | 8 bits: <cc type> (CC=0, RPN=1, NRPN=2)
+  * x | 8 bits: <channel> |
   * x | 8 bits: <CC arg1> |
   * x | 8 bits: <CC arg2> |
   */
@@ -85,22 +86,25 @@ object Binary {
 
   private def binaryEncodeCc(buffer: ByteBuffer, cc: (Int, MidiMessageType)): ByteBuffer =
     cc match {
-      case (offset, MidiCC(ccNumber)) =>
+      case (offset, MidiCC(channel, ccNumber)) =>
         buffer
           .putShort(offset.toShort)
           .put(0.toByte)
+          .put(channel.toByte)
           .put(ccNumber.toByte)
           .put(0.toByte)
-      case (offset, MidiRPN(msb, lsb)) =>
+      case (offset, MidiRPN(channel, msb, lsb)) =>
         buffer
           .putShort(offset.toShort)
           .put(1.toByte)
+          .put(channel.toByte)
           .put(msb.toByte)
           .put(lsb.toByte)
-      case (offset, MidiNRPN(msb, lsb)) =>
+      case (offset, MidiNRPN(channel, msb, lsb)) =>
         buffer
           .putShort(offset.toShort)
           .put(2.toByte)
+          .put(channel.toByte)
           .put(msb.toByte)
           .put(lsb.toByte)
     }
