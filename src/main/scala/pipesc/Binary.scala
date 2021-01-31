@@ -94,13 +94,13 @@ object Binary {
       case (offset, MidiRPN(msb, lsb)) =>
         buffer
           .putShort(offset.toShort)
-          .put(0.toByte)
+          .put(1.toByte)
           .put(msb.toByte)
           .put(lsb.toByte)
       case (offset, MidiNRPN(msb, lsb)) =>
         buffer
           .putShort(offset.toShort)
-          .put(0.toByte)
+          .put(2.toByte)
           .put(msb.toByte)
           .put(lsb.toByte)
     }
