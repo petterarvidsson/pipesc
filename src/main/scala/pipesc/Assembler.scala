@@ -86,7 +86,7 @@ case class Program(instructions: Seq[Instruction],
                    stackSize: Int,
                    controllers: Map[Int, InputController],
                    groups: Map[Int, GroupDefinition],
-                   ccs: Map[Int, Int])
+                   ccs: Map[Int, MidiMessageType])
 case class InputController(group: Int, row: Int, column: Int, description: Text, min: Int, max: Int, step: Int)
 object InputController {
   def apply(group: Int, controller: ControllerDefinition): InputController =
@@ -167,7 +167,7 @@ object Assembler {
     val ccs = for ((cc, i) <- unrolledProgram.ccs.zipWithIndex) yield {
       val stackOffset = valueMapping.size + i
       val fragment = assemble(cc.statement, stackOffset, valueMapping)
-      (stackOffset, fragment.instructions, fragment.maxOffset + 1, cc.cc)
+      (stackOffset, fragment.instructions, fragment.maxOffset + 1, cc.midi)
     }
     val controllers = unrolledProgram.controllers.map {
       case (id, controller) => valueMapping(id) -> InputController(groupMapping(controller.groupIdentifier), controller)

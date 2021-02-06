@@ -20,12 +20,12 @@ class LanguageSpec extends FlatSpec with Matchers {
   def f(int a) =
     a
 
-  midi_cc(74)() =
+  midi_cc(1)(74)() =
     f(1)
   """
 
     compileToProgram(code) shouldEqual Right(
-      UnrolledPipeProgram(List(UnrolledCC(74, Constant(1), Set())), Map.empty, Map.empty))
+      UnrolledPipeProgram(List(UnrolledMidiDefinition(MidiCC(1, 74), Constant(1), Set())), Map.empty, Map.empty))
 
   }
 
@@ -34,12 +34,12 @@ class LanguageSpec extends FlatSpec with Matchers {
   def f(int a) =
     a
 
-  midi_cc(74)() =
+  midi_cc(1)(74)() =
     if(1, f(1), f(2))
   """
 
     compileToProgram(code) shouldEqual Right(
-      UnrolledPipeProgram(List(UnrolledCC(74, NativeIfStatement(Constant(1), Constant(1), Constant(2)), Set())),
+      UnrolledPipeProgram(List(UnrolledMidiDefinition(MidiCC(1, 74), NativeIfStatement(Constant(1), Constant(1), Constant(2)), Set())),
                           Map.empty,
                           Map.empty))
 
@@ -50,7 +50,7 @@ class LanguageSpec extends FlatSpec with Matchers {
   def f(int a) =
     f(a)
 
-  midi_cc(74)() =
+  midi_cc(1)(74)() =
     f(1)
   """
 
@@ -67,7 +67,7 @@ class LanguageSpec extends FlatSpec with Matchers {
   def f(int a) =
     g(a)
 
-  midi_cc(74)() =
+  midi_cc(1)(74)() =
     f(1)
   """
 
@@ -78,7 +78,7 @@ class LanguageSpec extends FlatSpec with Matchers {
 
   it should "not allow division with zero" in {
     val code = """
-  midi_cc(74)() =
+  midi_cc(1)(74)() =
     div(10,0)
   """
 
@@ -90,7 +90,7 @@ class LanguageSpec extends FlatSpec with Matchers {
   def f(int[10..12] a) =
     a
 
-  midi_cc(74)() =
+  midi_cc(1)(74)() =
     f(13)
   """
 
@@ -102,7 +102,7 @@ class LanguageSpec extends FlatSpec with Matchers {
   def f(int[-1..-1] a, int[1..1] b) =
     div(1, if(1, a, b))
 
-  midi_cc(74)() =
+  midi_cc(1)(74)() =
     add(f(-1, 1), 1)
   """
 
@@ -115,7 +115,7 @@ class LanguageSpec extends FlatSpec with Matchers {
 
   controller amp(volume, 0, 0, "", 0, 1023, 1)
 
-  midi_cc(74)(amp) =
+  midi_cc(1)(74)(amp) =
     scale(amp)
   """
 
@@ -124,7 +124,7 @@ class LanguageSpec extends FlatSpec with Matchers {
 
   controller amp(volume, 0, 0, "", 0, 1023, 1)
 
-  midi_cc(74)(amp) =
+  midi_cc(1)(74)(amp) =
     div(add(amp, 0), 9)
   """
 
@@ -137,7 +137,7 @@ class LanguageSpec extends FlatSpec with Matchers {
 
   controller amp(volume, 0, 0, "", 0, 3, 1)
 
-  midi_cc(74)(amp) =
+  midi_cc(1)(74)(amp) =
     scale(amp)
   """
 
@@ -146,7 +146,7 @@ class LanguageSpec extends FlatSpec with Matchers {
 
   controller amp(volume, 0, 0, "", 0, 3, 1)
 
-  midi_cc(74)(amp) =
+  midi_cc(1)(74)(amp) =
     div(add(amp, 0), 1)
   """
 

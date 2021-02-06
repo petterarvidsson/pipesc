@@ -15,7 +15,7 @@ case class NSIdentifier(namespace: Seq[String], identifier: String) extends Posi
     }
 }
 
-case class PipeProgram(ccs: Seq[MidiCCDefinition],
+case class PipeProgram(ccs: Seq[MidiDefinition],
                        controllers: Map[String, ControllerDefinition],
                        groups: Map[String, GroupDefinition],
                        functions: Map[NSIdentifier, Function])
@@ -221,7 +221,7 @@ class Noop extends NativePipeStatement {
   override def returnType = IntegerType(Seq(MinMax(0, 0)))
 }
 
-case class MidiCCDefinition(cc: Int, arguments: Seq[String], statement: PipeStatement) extends Positional
+case class MidiDefinition(midi: MidiMessageType, arguments: Seq[String], statement: PipeStatement) extends Positional
 
 case class GroupDefinition(identifier: String,
                            description: Text,
@@ -269,7 +269,11 @@ object PipeParser extends Parsers {
 
   def dot = positioned(accept(".", { case d: Dot => d }))
 
-  def midicc = positioned(accept("midicc", { case m: MidiCC => m }))
+  def midicc = positioned(accept("midicc", { case m: MidiCCToken => m }))
+
+  def midirpn = positioned(accept("midirpn", { case m: MidiRPNToken => m }))
+
+  def midinrpn = positioned(accept("midinrpn", { case m: MidiNRPNToken => m }))
 
   def arglist(namespaceSeq: Seq[String]): Parser[Positioned[Seq[PipeStatement]]] =
     positioned(rep1sep(statement(namespaceSeq), comma) ^^ (Positioned(_)))
@@ -330,22 +334,28 @@ object PipeParser extends Parsers {
     s.unzip
   }
 
+  private def notInArgs(statement: PipeStatement, arguments: Seq[String], errorStr: String): Option[String] = {
+    val missing = for {
+      v <- PipeStatement.values(statement) if !arguments.contains(v.identifier)
+    } yield {
+      s"${v.identifier} is undefined in $errorStr"
+    }
+    if(missing.isEmpty) {
+      None
+    } else {
+      Some(missing.mkString("\n"))
+    }
+  }
+
   def fnDef(namespaceSeq: Seq[String]) =
     positioned {
       `def` ~ namespaceIdentifier(namespaceSeq) ~ open ~ fndefarglist ~ close ~ equals ~ newline.* ~ statement(
         namespaceSeq) flatMap {
         case _ ~ i ~ _ ~ ((args, types)) ~ _ ~ _ ~ _ ~ statement =>
           val arguments = args.map(_.name)
-          val unidentified = for {
-            v <- PipeStatement.values(statement) if !arguments.contains(v.identifier)
-          } yield {
-            s"${v.identifier} is undefined in function ${i.name}"
-          }
-
-          if (unidentified.isEmpty) {
-            success(FunctionDefinition(i, arguments, statement, types))
-          } else {
-            err(unidentified.mkString("\n"))
+          notInArgs(statement, arguments, s"function ${i.name}") match {
+            case None => success(FunctionDefinition(i, arguments, statement, types))
+            case Some(error) => err(error)
           }
       }
     }
@@ -368,21 +378,43 @@ object PipeParser extends Parsers {
 
   def midiCCDef(namespaceSeq: Seq[String]) =
     positioned {
-      midicc ~ open ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
-        case _ ~ _ ~ cc ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
+      midicc ~ open ~ constant ~ close ~ open ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
+        case _ ~ _ ~ channel ~ _ ~ _ ~ cc ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
           val arguments = args.value.map(_.name)
-          val unidentified = for {
-            v <- PipeStatement.values(statement) if !arguments.contains(v.identifier)
-          } yield {
-            s"${v.identifier} is undefined in definition of midi cc ${cc.value}"
-          }
-          if (unidentified.isEmpty) {
-            success(MidiCCDefinition(cc.value, arguments, statement))
-          } else {
-            err(unidentified.mkString("\n"))
+          val midiCC = MidiCC(channel.value, cc.value)
+          notInArgs(statement, arguments, s"definition of ${midiCC.identifier}") match {
+            case None => success(MidiDefinition(midiCC, arguments, statement))
+            case Some(error) => err(error)
           }
       }
     }
+
+  def midiRPNDef(namespaceSeq: Seq[String]) =
+    positioned {
+      midirpn ~ open ~ constant ~ close ~ open ~ constant ~ comma ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
+        case _ ~ _ ~ channel ~ _ ~ _ ~ msb ~ _ ~ lsb ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
+          val arguments = args.value.map(_.name)
+          val midiRPN = MidiRPN(channel.value, msb.value, lsb.value)
+          notInArgs(statement, arguments, s"definition of ${midiRPN.identifier}") match {
+            case None => success(MidiDefinition(midiRPN, arguments, statement))
+            case Some(error) => err(error)
+          }
+      }
+    }
+
+  def midiNRPNDef(namespaceSeq: Seq[String]) =
+    positioned {
+      midinrpn ~ open ~ constant ~ close ~ open ~ constant ~ comma ~ constant ~ close ~ open ~ mididefarglist ~ close ~ equals ~ newline.* ~ statement(namespaceSeq) flatMap {
+        case _ ~ _ ~ channel ~ _ ~ _ ~ msb ~ _ ~ lsb ~ _ ~ _ ~ args ~ _ ~ _ ~ _ ~ statement =>
+          val arguments = args.value.map(_.name)
+          val midiNRPN = MidiNRPN(channel.value, msb.value, lsb.value)
+          notInArgs(statement, arguments, s"definition of midi ${midiNRPN.identifier}") match {
+            case None => success(MidiDefinition(midiNRPN, arguments, statement))
+            case Some(error) => err(error)
+          }
+      }
+    }
+
 
   def fn(namespaceSeq: Seq[String]) =
     positioned(namespaceIdentifier(namespaceSeq) ~ open ~ arglist(namespaceSeq) ~ close ^^ {
@@ -399,9 +431,9 @@ object PipeParser extends Parsers {
     positioned(ifa(namespaceSeq) | fn(namespaceSeq) | constant | value)
 
   def file(namespaceSeq: Seq[String]): Parser[PipeProgram] =
-    phrase(rep1(controllerDef | midiCCDef(namespaceSeq) | fnDef(namespaceSeq) | groupDef | newline)) flatMap { defs =>
+    phrase(rep1(controllerDef | midiCCDef(namespaceSeq) | midiRPNDef(namespaceSeq) | midiNRPNDef(namespaceSeq) | fnDef(namespaceSeq) | groupDef | newline)) flatMap { defs =>
       val ccs = defs.collect {
-        case cc: MidiCCDefinition => cc
+        case cc: MidiDefinition => cc
       }
 
       val controllers = Map(defs.collect {
@@ -426,7 +458,7 @@ object PipeParser extends Parsers {
         cc <- ccs
         argument <- cc.arguments if !controllers.contains(argument)
       } yield {
-        s"No such controller ${argument} defined for midi cc ${cc.cc}"
+        s"No such controller ${argument} defined for ${cc.midi.identifier}"
       }
 
       val undefined = undefinedGroups ++ undefinedControllers

@@ -2,8 +2,8 @@ package pipesc
 
 import java.nio.file.Path
 
-case class UnrolledCC(cc: Int, statement: NativePipeStatement, inputs: Set[ControllerDefinition])
-case class UnrolledPipeProgram(ccs: Seq[UnrolledCC],
+case class UnrolledMidiDefinition(midi: MidiMessageType, statement: NativePipeStatement, inputs: Set[ControllerDefinition])
+case class UnrolledPipeProgram(ccs: Seq[UnrolledMidiDefinition],
                                controllers: Map[String, ControllerDefinition],
                                groups: Map[String, GroupDefinition])
 
@@ -15,7 +15,7 @@ object UnrolledPipeProgram {
     }
     for (cc <- program.ccs) {
       val inputs = cc.inputs.map(_.identifier).mkString(", ")
-      NativePipeStatement.printIndented(s"CC${cc.cc}($inputs) {", 0)
+      NativePipeStatement.printIndented(s"${cc.midi.identifier}($inputs) {", 0)
       NativePipeStatement.prettyPrint(cc.statement, 1)
       NativePipeStatement.printIndented(s"}", 0)
     }
@@ -133,7 +133,7 @@ object Plumber {
     unroll(fn.statement, arguments, functions, functionsCalled, expectedType)
   }
 
-  def unroll(cc: MidiCCDefinition,
+  def unroll(cc: MidiDefinition,
              arguments: Map[String, (NativePipeStatement, Seq[CompilerError])],
              functions: Map[NSIdentifier, Function]): (NativePipeStatement, Seq[CompilerError]) = {
     unroll(cc.statement, arguments, functions, Set.empty[NSIdentifier], Plumber.MidiType)
@@ -153,11 +153,11 @@ object Plumber {
       val ccErrors = if (!Type.withinBounds(returnType, MidiType)) {
         Seq(
           CompilerError(cc.statement.pos,
-                        s"${returnType.prettyPrint} is out of cc #${cc.cc} bounds [${MidiType.prettyPrint}]"))
+                        s"${returnType.prettyPrint} is out of ${cc.midi.identifier} bounds [${MidiType.prettyPrint}]"))
       } else {
         Seq.empty
       }
-      (UnrolledCC(cc.cc, statement, arguments.values.map(_._1).toSet), errors ++ ccErrors)
+      (UnrolledMidiDefinition(cc.midi, statement, arguments.values.map(_._1).toSet), errors ++ ccErrors)
     })
 
     val unrolledProgram = UnrolledPipeProgram(
